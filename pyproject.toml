@@ -1,0 +1,28 @@
+[project]
+name = "bazibase"
+version = "0.4.0"
+description = "Deterministic Ba Zi chart casting layer (Layer 1) for the mingli agent"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "lunar_python>=1.3.0",
+]
+
+[project.scripts]
+bazibase = "bazibase.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["bazibase"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
