@@ -328,25 +328,32 @@ export default function SessionPage() {
     setLoading(true);
 
     try {
-      const res = await sendChatMessage({
-        conversation_id: conversationId ?? undefined,
-        message: text,
-      });
+      const res = await sendChatMessage(
+        { conversation_id: conversationId ?? undefined, message: text },
+        (chunk) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === pendingId
+                ? { ...m, content: m.content + chunk, pending: false }
+                : m,
+            ),
+          );
+        },
+      );
       setConversationId(res.conversation_id);
       navigate(`/session/${res.conversation_id}`, { replace: true });
       setAnalysisId(res.analysis_id);
       setLatestState(res.state);
       setMessages((prev) =>
-        prev.map((message) =>
-          message.id === pendingId
+        prev.map((m) =>
+          m.id === pendingId
             ? {
-                ...message,
-                content: res.reply,
+                ...m,
                 analysis_id: res.analysis_id,
                 followups: res.state.suggested_followups,
                 pending: false,
               }
-            : message,
+            : m,
         ),
       );
       refreshConversations();

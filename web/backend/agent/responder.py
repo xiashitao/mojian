@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from typing import Any
 
 from ..config import settings
-from ..services.deepseek import DeepSeekAPIError, call_deepseek
+from ..services.deepseek import DeepSeekAPIError, call_deepseek, stream_deepseek
 from .models import BirthInfo, ChatState, Topic
 
 
@@ -93,6 +94,76 @@ def build_consultation_reply(
         "raw_response": llm_result["raw_response"] if llm_result is not None else None,
     }
     return reply, state, generation_trace
+
+
+def stream_consultation_reply(
+    topic: Topic | None,
+    tool_result: dict[str, Any],
+    *,
+    source_basis: dict[str, Any],
+    clarify_previous: bool = False,
+) -> Iterator[tuple[str, ChatState | None, dict[str, Any] | None]]:
+    """Stream the consultation reply chunk by chunk.
+
+    Yields tuples of (text_chunk, final_state, generation_trace).
+    - During streaming: (chunk, None, None)
+    - On completion: ("", chat_state, generation_trace)
+    - On LLM unavailable: falls back to non-streaming template reply
+    """
+    actual_topic = topic or "personality"
+    chart = tool_result["chart"]
+    diagnosis = tool_result["diagnosis"]
+    arbitration = tool_result["arbitration"]
+    context = _context_from_tool_result(chart, diagnosis, arbitration, source_basis)
+    followups = _followups(actual_topic)
+
+    if not settings.deepseek_api_key:
+        if clarify_previous:
+            reply = _clarify_reply(context)
+        elif actual_topic == "career":
+            reply = _career_reply(context)
+        elif actual_topic == "relationship":
+            reply = _relationship_reply(context)
+        elif actual_topic == "wealth":
+            reply = _wealth_reply(context)
+        else:
+            reply = _personality_reply(context)
+        if followups:
+            reply += "\n\n你可以继续问：" + " / ".join(followups)
+        state = ChatState(topic=actual_topic, needs_more_info=False,
+                         missing_fields=[], suggested_followups=followups)
+        generation_trace = {"mode": "deterministic_template", "topic": actual_topic}
+        yield reply, state, generation_trace
+        return
+
+    prompt = _build_stream_reply_prompt(actual_topic, context,
+                                         clarify_previous=clarify_previous,
+                                         followups=followups)
+    collected = []
+    try:
+        for chunk in stream_deepseek(prompt["system_prompt"], prompt["user_prompt"],
+                                      temperature=0.7):
+            collected.append(chunk)
+            yield chunk, None, None
+    except DeepSeekAPIError:
+        # fallback to template on stream error
+        if clarify_previous:
+            reply = _clarify_reply(context)
+        elif actual_topic == "career":
+            reply = _career_reply(context)
+        else:
+            reply = _personality_reply(context)
+        state = ChatState(topic=actual_topic, needs_more_info=False,
+                         missing_fields=[], suggested_followups=followups)
+        yield reply, state, {"mode": "deterministic_template_fallback", "topic": actual_topic}
+        return
+
+    full_reply = "".join(collected)
+    state = ChatState(topic=actual_topic, needs_more_info=False,
+                     missing_fields=[], suggested_followups=followups)
+    generation_trace = {"mode": "deepseek_stream", "topic": actual_topic,
+                        "reply": full_reply, "raw_response": full_reply}
+    yield "", state, generation_trace
 
 
 def _context_from_tool_result(
@@ -228,6 +299,67 @@ def _topic_cn(topic: Topic | None) -> str:
         "personality": "性格",
     }.get(topic or "career", "这个问题")
 
+
+def _build_stream_reply_prompt(
+    topic: Topic,
+    context: dict[str, Any],
+    *,
+    clarify_previous: bool,
+    followups: list[str],
+) -> dict[str, str]:
+    """Build a plain-text streaming prompt (no JSON response_format)."""
+    system_prompt = (
+        "你是一位谨慎、专业、简洁的命理咨询助手。"
+        "基于以下结构化分析结果，用自然流畅的中文直接回答用户的问题。"
+        "不要编造超出分析结论的内容。不要提及具体流派名、古籍或后台规则。"
+        "回答控制在200字以内，语气沉稳克制。"
+        f"最后推荐1-2个追问方向，格式：你可以继续问：{' / '.join(followups[:2])}"
+    )
+    analysis_block = {
+        "topic": topic,
+        "clarify_previous": clarify_previous,
+        "day_master": context.get("day_master"),
+        "day_master_element": context.get("day_master_element"),
+        "strength_verdict": context.get("strength_verdict"),
+        "ge_ju": context.get("ge_ju"),
+        "yong_shen_ten_god": context.get("yong_shen_ten_god"),
+        "cheng_bai": context.get("cheng_bai"),
+        "has_unresolved_cases": context.get("has_unresolved_cases"),
+        "arbitration_decisions": context.get("arbitration_decisions", {}),
+    }
+    user_prompt = json.dumps(analysis_block, ensure_ascii=False, indent=2)
+    return {"system_prompt": system_prompt, "user_prompt": user_prompt}
+
+def _build_stream_reply_prompt(
+    topic: Topic,
+    context: dict[str, Any],
+    *,
+    clarify_previous: bool,
+    followups: list[str],
+) -> dict[str, str]:
+    """Build a streaming (non-JSON) prompt for consultation reply."""
+    system_prompt = (
+        "你是一位谨慎、专业、简洁的命理咨询助手。"
+        "基于以下结构化分析结果，用自然流畅的中文直接回答用户的问题。"
+        "不要编造超出分析结论的内容。不要提及具体流派名、古籍或后台规则。"
+        "回答控制在200字以内，语气沉稳克制。"
+        "最后推荐1-2个追问方向，格式：\n你可以继续问：问题1 / 问题2"
+    )
+    analysis_block = {
+        "topic": topic,
+        "clarify_previous": clarify_previous,
+        "day_master": context.get("day_master"),
+        "day_master_element": context.get("day_master_element"),
+        "strength_verdict": context.get("strength_verdict"),
+        "ge_ju": context.get("ge_ju"),
+        "yong_shen_ten_god": context.get("yong_shen_ten_god"),
+        "cheng_bai": context.get("cheng_bai"),
+        "has_unresolved_cases": context.get("has_unresolved_cases"),
+        "arbitration_decisions": context.get("arbitration_decisions", {}),
+        "followup_candidates": followups,
+    }
+    user_prompt = json.dumps(analysis_block, ensure_ascii=False, indent=2)
+    return {"system_prompt": system_prompt, "user_prompt": user_prompt}
 
 def _build_reply_prompt(
     topic: Topic,
