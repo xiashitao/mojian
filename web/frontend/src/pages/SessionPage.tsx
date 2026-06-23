@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import logo from "../assets/logo.png";
+import { KairosLogo } from "../components/KairosLogo";
 import { getChatAnalysis, sendChatMessage } from "../api/chatApi";
 import { getConversation, listConversations } from "../api/conversationApi";
 import type {
@@ -20,6 +20,7 @@ type UiMessage = {
   followups?: string[];
   pending?: boolean;
   error?: boolean;
+  feedback?: "like" | "dislike" | null;
 };
 
 type BirthInfo = {
@@ -445,10 +446,9 @@ export default function SessionPage() {
           >
             案
           </button>
-          <img
+          <KairosLogo
+            size={44}
             className="oracle-header__logo"
-            src={logo}
-            alt="Kairos"
             role="button"
             onClick={() => navigate("/")}
           />
@@ -543,12 +543,13 @@ export default function SessionPage() {
 
         {/* ── MIDDLE · 问诊 ── */}
         <section className="oracle-chat">
-          {messages.length === 0 ? (
-            <div className="oracle-empty oracle-empty--slim">
-              <p className="oracle-empty__hint">有什么想了解的，直接问我。</p>
-            </div>
-          ) : (
-            <div className="message-stream">
+          <div className="oracle-chat__scroll">
+            {messages.length === 0 ? (
+              <div className="oracle-empty oracle-empty--slim">
+                <p className="oracle-empty__hint">有什么想了解的，直接问我。</p>
+              </div>
+            ) : (
+              <div className="message-stream">
               {messages.map((message) => (
                 <article
                   key={message.id}
@@ -574,6 +575,51 @@ export default function SessionPage() {
                       </span>
                     </div>
                   )}
+                  {!message.pending && message.role === "assistant" && !message.error && (
+                    <div className="message__actions">
+                      <button
+                        type="button"
+                        className="msg-action"
+                        aria-label="复制"
+                        onClick={() => navigator.clipboard.writeText(message.content)}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="5" y="5" width="9" height="9" rx="1.5" />
+                          <path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2H3.5A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className={`msg-action ${message.feedback === "like" ? "is-active" : ""}`}
+                        aria-label="有用"
+                        onClick={() => setMessages(prev => prev.map(m =>
+                          m.id === message.id
+                            ? { ...m, feedback: m.feedback === "like" ? null : "like" }
+                            : m
+                        ))}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M5 7 L7.5 2 Q8 1 9 1.5 L9 5 H13.5 Q14.5 5 14 6.5 L12.5 11.5 Q12 13 11 13 H7 Q6 13 6 12 V8 Q6 7 5 7 Z" />
+                          <path d="M5 7 H3.5 Q2 7 2 8 V12 Q2 13 3.5 13 H5" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className={`msg-action ${message.feedback === "dislike" ? "is-active" : ""}`}
+                        aria-label="没用"
+                        onClick={() => setMessages(prev => prev.map(m =>
+                          m.id === message.id
+                            ? { ...m, feedback: m.feedback === "dislike" ? null : "dislike" }
+                            : m
+                        ))}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M11 9 L8.5 14 Q8 15 7 14.5 L7 11 H2.5 Q1.5 11 2 9.5 L3.5 4.5 Q4 3 5 3 H9 Q10 3 10 4 V8 Q10 9 11 9 Z" />
+                          <path d="M11 9 H12.5 Q14 9 14 8 V4 Q14 3 12.5 3 H11" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
                   {!message.pending &&
                     !message.error &&
                     message.followups &&
@@ -595,29 +641,39 @@ export default function SessionPage() {
                 </article>
               ))}
               <div ref={bottomRef} />
-            </div>
-          )}
+              </div>
+            )}
+          </div>
 
           <div className="composer">
-            <textarea
-              className="composer__input"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder="出生日期、地点、性别，以及你想了解的问题。"
-              rows={3}
-            />
-            <div className="composer__bar">
-              <span className="composer__hint">
-                回车发送 <i>·</i> Shift+回车换行
-              </span>
+            <div className="composer__wrap">
+              <textarea
+                className="composer__input"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder="出生日期、地点、性别，以及你想了解的问题。"
+                autoComplete="off"
+                rows={1}
+              />
               <button
                 type="button"
                 className="composer__send"
                 onClick={() => void send()}
                 disabled={loading || !input.trim()}
+                aria-label="发送"
               >
-                {loading ? "分析中" : "发送"}
+                {loading ? (
+                  <svg className="composer__spinner" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <circle cx="8" cy="8" r="6" strokeOpacity="0.25" />
+                    <path d="M8 2a6 6 0 0 1 6 6" />
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 8L14 2L8 14L7 9L2 8Z" />
+                    <path d="M7 9L14 2" />
+                  </svg>
+                )}
               </button>
             </div>
           </div>

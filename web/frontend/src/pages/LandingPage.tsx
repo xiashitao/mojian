@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import logo from "../assets/logo.png";
+import { KairosLogo } from "../components/KairosLogo";
 import { ThemeSwitcher } from "../theme";
 
 const PLACEHOLDERS = [
@@ -44,7 +44,7 @@ export default function LandingPage() {
 
       <header className="oracle-header oracle-header--landing">
         <div className="oracle-header__brand">
-          <img className="oracle-header__logo" src={logo} alt="Kairos" />
+          <KairosLogo size={44} className="oracle-header__logo" />
           <span className="oracle-header__mark">Kairos</span>
         </div>
         <nav className="oracle-header__actions">
@@ -61,7 +61,7 @@ export default function LandingPage() {
 
       <main className="landing__main">
         <section className="landing__hero" aria-labelledby="landing-title">
-          <img className="landing__hero-logo" src={logo} alt="Kairos" />
+          <KairosLogo size={68} className="landing__hero-logo" />
           <div className="oracle-empty__eyebrow">看清局势 · 把握时机</div>
           <h1 id="landing-title" className="oracle-empty__title">
             Kairos

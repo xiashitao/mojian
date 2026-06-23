@@ -3,11 +3,48 @@ import type { ChatAnalysis, ChatRequest, ChatResponse } from "../types/api";
 
 const BASE_URL = "/api";
 
+// 切换为 true 可完全不启动后端，在浏览器内验证流式 UI
+const MOCK_MODE = true;
+
+const _MOCK_REPLY =
+  "根据你的命盘结构来看，日主偏强，用神倾向食伤泄秀。" +
+  "事业上比较适合在专业领域深耕，靠能力和作品建立信用，" +
+  "而不是靠人脉和资源驱动的方向。\n\n" +
+  "当前运势处于过渡期，适合稳固现有基础，" +
+  "不宜大规模扩张或冒险性投入。明年下半年开始，" +
+  "会进入一个相对顺畅的阶段，可以考虑做一些中期布局。\n\n" +
+  "你可以继续问：适合哪个行业方向？ / 明年有什么需要注意的？";
+
+async function _mockStream(
+  onToken: (text: string) => void,
+): Promise<ChatResponse> {
+  const chunkSize = 3;
+  for (let i = 0; i < _MOCK_REPLY.length; i += chunkSize) {
+    const chunk = _MOCK_REPLY.slice(i, i + chunkSize);
+    onToken(chunk);
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return {
+    conversation_id: "mock-conv-001",
+    analysis_id: "mock-analysis-001",
+    reply: _MOCK_REPLY,
+    state: {
+      topic: "career",
+      needs_more_info: false,
+      missing_fields: [],
+      suggested_followups: ["适合哪个行业方向？", "明年有什么需要注意的？"],
+    },
+  };
+}
+
 export async function sendChatMessage(
   req: ChatRequest,
   onToken: (text: string) => void,
 ): Promise<ChatResponse> {
-  const res = await fetch(`${BASE_URL}/chat`, {
+  if (MOCK_MODE) return _mockStream(onToken);
+
+  const endpoint = `${BASE_URL}/chat`;
+  const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
