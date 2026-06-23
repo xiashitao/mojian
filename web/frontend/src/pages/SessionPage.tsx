@@ -1,0 +1,740 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import logo from "../assets/logo.png";
+import { getChatAnalysis, sendChatMessage } from "../api/chatApi";
+import { getConversation, listConversations } from "../api/conversationApi";
+import type {
+  ChatAnalysis,
+  ChatState,
+  ConversationSummary,
+  Topic,
+} from "../types/api";
+import { ThemeSwitcher } from "../theme";
+
+type UiMessage = {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  analysis_id: string | null;
+  created_at?: string;
+  followups?: string[];
+  pending?: boolean;
+  error?: boolean;
+};
+
+type BirthInfo = {
+  birth_date?: string | null;
+  birth_time?: string | null;
+  birth_place?: string | null;
+  gender?: string | null;
+  longitude?: number | null;
+};
+
+type StoredState = {
+  conversationId: string | null;
+  analysisId: string | null;
+  adminMode: boolean;
+  messages: UiMessage[];
+  latestState: ChatState | null;
+};
+
+type LayoutState = {
+  archiveCollapsed: boolean;
+  railCollapsed: boolean;
+};
+
+const STORAGE_KEY = "bazibase-chat-session-v3";
+const LAYOUT_KEY = "bazibase-panel-layout";
+const ADMIN_CODE =
+  (import.meta.env.VITE_ADMIN_UNLOCK_CODE as string | undefined) ?? "bypass";
+
+function loadState(): StoredState {
+  const adminFlag = window.localStorage.getItem("bazibase-admin-mode") === "1";
+  const base: StoredState = {
+    conversationId: null,
+    analysisId: null,
+    adminMode:
+      adminFlag ||
+      new URLSearchParams(window.location.search).get("admin") === "1",
+    messages: [],
+    latestState: null,
+  };
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return base;
+    const parsed = JSON.parse(raw) as Partial<StoredState>;
+    return {
+      ...base,
+      conversationId: parsed.conversationId ?? null,
+      analysisId: parsed.analysisId ?? null,
+      adminMode: parsed.adminMode || adminFlag,
+      messages: Array.isArray(parsed.messages) ? parsed.messages : [],
+      latestState: parsed.latestState ?? null,
+    };
+  } catch {
+    return base;
+  }
+}
+
+function loadLayout(): LayoutState {
+  try {
+    const raw = localStorage.getItem(LAYOUT_KEY);
+    if (!raw) return { archiveCollapsed: false, railCollapsed: false };
+    const parsed = JSON.parse(raw) as Partial<LayoutState>;
+    return {
+      archiveCollapsed: parsed.archiveCollapsed === true,
+      railCollapsed: parsed.railCollapsed === true,
+    };
+  } catch {
+    return { archiveCollapsed: false, railCollapsed: false };
+  }
+}
+
+function topicText(topic: Topic | string | null | undefined): string {
+  if (!topic) return "未定";
+  switch (topic) {
+    case "career":
+      return "事业";
+    case "relationship":
+      return "感情";
+    case "wealth":
+      return "财运";
+    case "personality":
+      return "性格";
+    default:
+      return "未定";
+  }
+}
+
+function genderText(g: string | null | undefined): string {
+  if (g === "male") return "乾造";
+  if (g === "female") return "坤造";
+  return "——";
+}
+
+function relativeTime(sqliteTs: string | null | undefined): string {
+  if (!sqliteTs) return "——";
+  const d = new Date(sqliteTs.replace(" ", "T") + "Z");
+  if (Number.isNaN(d.getTime())) return "——";
+  const now = Date.now();
+  const diff = now - d.getTime();
+  const min = Math.floor(diff / 60000);
+  const hr = Math.floor(diff / 3600000);
+  const day = Math.floor(diff / 86400000);
+  if (min < 1) return "方才";
+  if (min < 60) return `${min}分前`;
+  if (hr < 24) return `${hr}时前`;
+  if (day === 1) return "昨日";
+  if (day < 7) return `${day}日前`;
+  if (d.getFullYear() === new Date().getFullYear()) {
+    return `${d.getMonth() + 1}月${d.getDate()}日`;
+  }
+  return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
+}
+
+function fieldLabel(field: string) {
+  switch (field) {
+    case "birth_date":
+      return "生日";
+    case "birth_time":
+      return "时辰";
+    case "birth_place":
+      return "出生地";
+    case "gender":
+      return "性别";
+    default:
+      return field;
+  }
+}
+
+export default function SessionPage() {
+  const initial = useMemo(() => loadState(), []);
+  const initialLayout = useMemo(() => loadLayout(), []);
+  const location = useLocation();
+  const initialMessage = (
+    location.state as { initialMessage?: string } | null
+  )?.initialMessage;
+
+  const navigate = useNavigate();
+  const { conversationId: urlConversationId } = useParams<{
+    conversationId: string;
+  }>();
+
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [analysisId, setAnalysisId] = useState<string | null>(null);
+  const [adminMode, setAdminMode] = useState(initial.adminMode);
+  const [messages, setMessages] = useState<UiMessage[]>([]);
+  const [latestState, setLatestState] = useState<ChatState | null>(null);
+  const [birthInfo, setBirthInfo] = useState<BirthInfo | null>(null);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [analysis, setAnalysis] = useState<ChatAnalysis | null>(null);
+  const [adminError, setAdminError] = useState<string | null>(null);
+  const [showTrace, setShowTrace] = useState(false);
+  const [loadingConv, setLoadingConv] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<"archive" | "rail" | null>(
+    null,
+  );
+  const [archiveCollapsed, setArchiveCollapsed] = useState(
+    initialLayout.archiveCollapsed,
+  );
+  const [railCollapsed, setRailCollapsed] = useState(
+    initialLayout.railCollapsed,
+  );
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const sentRef = useRef(false);
+
+  const refreshConversations = useCallback(() => {
+    listConversations()
+      .then(setConversations)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshConversations();
+  }, [refreshConversations]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        conversationId,
+        analysisId,
+        adminMode,
+        messages,
+        latestState,
+      } satisfies StoredState),
+    );
+  }, [analysisId, adminMode, conversationId, latestState, messages]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      LAYOUT_KEY,
+      JSON.stringify({ archiveCollapsed, railCollapsed } satisfies LayoutState),
+    );
+  }, [archiveCollapsed, railCollapsed]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, loading]);
+
+  useEffect(() => {
+    if (!adminMode || !analysisId || !showTrace) {
+      setAnalysis(null);
+      setAdminError(null);
+      return;
+    }
+    let cancelled = false;
+    getChatAnalysis(analysisId)
+      .then((data) => {
+        if (!cancelled) {
+          setAnalysis(data);
+          setAdminError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setAdminError(err instanceof Error ? err.message : "无法加载 trace");
+          setAnalysis(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [adminMode, analysisId, showTrace]);
+
+  const loadConversation = useCallback(async (id: string) => {
+    setLoadingConv(true);
+    try {
+      const detail = await getConversation(id);
+      setConversationId(id);
+      setMessages(
+        detail.messages.map((m) => ({
+          id: m.id,
+          role: m.role as UiMessage["role"],
+          content: m.content,
+          analysis_id: m.analysis_id,
+          created_at: m.created_at,
+        })),
+      );
+      const state = (detail.state ?? {}) as Record<string, unknown>;
+      const birth = (state.birth_info ?? null) as BirthInfo | null;
+      setBirthInfo(birth);
+      const topic = (state.current_topic ?? null) as Topic;
+      const lastAnalysis = (state.last_analysis_id ?? null) as string | null;
+      setAnalysisId(lastAnalysis);
+      setLatestState(
+        topic
+          ? {
+              topic,
+              needs_more_info: false,
+              missing_fields: [],
+              suggested_followups: [],
+            }
+          : null,
+      );
+    } catch {
+      // conversation not found or error — silently ignore
+    } finally {
+      setLoadingConv(false);
+    }
+  }, []);
+
+  const selectConversation = useCallback(
+    (id: string) => {
+      if (id === conversationId) return;
+      setMobilePanel(null);
+      navigate(`/session/${id}`);
+    },
+    [conversationId, navigate],
+  );
+
+  const startNew = useCallback(() => {
+    setConversationId(null);
+    setMessages([]);
+    setAnalysisId(null);
+    setLatestState(null);
+    setBirthInfo(null);
+    setMobilePanel(null);
+    navigate("/session");
+  }, [navigate]);
+
+  const send = async (textInput?: string) => {
+    const text = (textInput ?? input).trim();
+    if (!text || loading) return;
+
+    const userId = `local-${crypto.randomUUID()}`;
+    const pendingId = `pending-${crypto.randomUUID()}`;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: userId,
+        role: "user",
+        content: text,
+        analysis_id: null,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: pendingId,
+        role: "assistant",
+        content: "",
+        analysis_id: null,
+        created_at: new Date().toISOString(),
+        pending: true,
+      },
+    ]);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const res = await sendChatMessage({
+        conversation_id: conversationId ?? undefined,
+        message: text,
+      });
+      setConversationId(res.conversation_id);
+      navigate(`/session/${res.conversation_id}`, { replace: true });
+      setAnalysisId(res.analysis_id);
+      setLatestState(res.state);
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === pendingId
+            ? {
+                ...message,
+                content: res.reply,
+                analysis_id: res.analysis_id,
+                followups: res.state.suggested_followups,
+                pending: false,
+              }
+            : message,
+        ),
+      );
+      refreshConversations();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "发送失败";
+      setMessages((prev) =>
+        prev.map((item) =>
+          item.id === pendingId
+            ? {
+                ...item,
+                content: `这一卦未能成象：${message}`,
+                pending: false,
+                error: true,
+              }
+            : item,
+        ),
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Receive initial message from landing page ──
+  useEffect(() => {
+    if (initialMessage && !sentRef.current) {
+      sentRef.current = true;
+      // Starting a new consultation from landing — clear any restored state first
+      setConversationId(null);
+      setMessages([]);
+      setAnalysisId(null);
+      setLatestState(null);
+      setBirthInfo(null);
+      void send(initialMessage);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMessage]);
+
+  // ── URL-driven conversation loading (direct visit / back / forward) ──
+  useEffect(() => {
+    if (!urlConversationId) return;
+    if (urlConversationId === conversationId) return;
+    void loadConversation(urlConversationId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlConversationId]);
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void send();
+    }
+  };
+
+  const toggleAdmin = () => {
+    const next = !adminMode;
+    if (!next) {
+      window.localStorage.removeItem("bazibase-admin-mode");
+      setShowTrace(false);
+      setAnalysis(null);
+      setAdminError(null);
+    } else {
+      const code = window.prompt("输入管理员口令");
+      if (code !== ADMIN_CODE) return;
+      window.localStorage.setItem("bazibase-admin-mode", "1");
+    }
+    setAdminMode(next);
+  };
+
+  const needsMore = latestState?.needs_more_info ?? false;
+  const missingLabels =
+    latestState?.missing_fields.map(fieldLabel).join("、") ?? "";
+  const railFollowups = latestState?.suggested_followups ?? [];
+  const currentTopic = latestState?.topic ?? null;
+  const currentConv = conversations.find((c) => c.id === conversationId);
+
+  return (
+    <div className="oracle">
+      <div className="oracle__grain" aria-hidden />
+      <div className="oracle__glow" aria-hidden />
+
+      <header className="oracle-header">
+        <div className="oracle-header__brand">
+          <button
+            type="button"
+            className="oracle-header__nav oracle-header__nav--left"
+            onClick={() =>
+              setMobilePanel(mobilePanel === "archive" ? null : "archive")
+            }
+            aria-label="案卷"
+          >
+            案
+          </button>
+          <img
+            className="oracle-header__logo"
+            src={logo}
+            alt="墨鉴"
+            role="button"
+            onClick={() => navigate("/")}
+          />
+          <span className="oracle-header__mark">墨鉴</span>
+          <span className="oracle-header__rule" aria-hidden />
+          <span className="oracle-header__sub">天命可鉴，来者可问。</span>
+          <button
+            type="button"
+            className="oracle-header__nav oracle-header__nav--right"
+            onClick={() =>
+              setMobilePanel(mobilePanel === "rail" ? null : "rail")
+            }
+            aria-label="案头"
+          >
+            注
+          </button>
+        </div>
+        <div className="oracle-header__actions">
+          <ThemeSwitcher />
+        </div>
+      </header>
+
+      <main
+        className={`oracle-body ${archiveCollapsed ? "is-archive-collapsed" : ""} ${railCollapsed ? "is-rail-collapsed" : ""}`}
+      >
+        {/* ── LEFT · 案卷 ── */}
+        <aside
+          className={`archive ${mobilePanel === "archive" ? "is-open" : ""}`}
+        >
+          <div className="archive__head">
+            <span className="archive__label">案卷</span>
+            <span className="archive__tag">ANS</span>
+            <button
+              type="button"
+              className="panel-collapse panel-collapse--archive"
+              onClick={() => setArchiveCollapsed(true)}
+              aria-label="收起案卷"
+            >
+              〈
+            </button>
+          </div>
+          <button
+            type="button"
+            className={`archive__new ${
+              !conversationId ? "is-active" : ""
+            }`}
+            onClick={startNew}
+          >
+            <span className="archive__new-mark">＋</span>
+            <span className="archive__new-text">新开一局</span>
+          </button>
+          <div className="archive__list">
+            {conversations.length === 0 && (
+              <div className="archive__empty">
+                <span>尚无案卷</span>
+                <span className="archive__empty-hint">
+                  送出第一句即开卷
+                </span>
+              </div>
+            )}
+            {conversations.map((conv) => (
+              <button
+                key={conv.id}
+                type="button"
+                className={`slip ${
+                  conv.id === conversationId ? "is-active" : ""
+                }`}
+                onClick={() => void selectConversation(conv.id)}
+                disabled={loadingConv}
+              >
+                <div className="slip__edge" aria-hidden />
+                <div className="slip__top">
+                  <span
+                    className={`slip__topic ${
+                      conv.topic ? "has-topic" : "no-topic"
+                    }`}
+                  >
+                    {conv.topic ? topicText(conv.topic) : "待定"}
+                  </span>
+                  <span className="slip__time">
+                    {relativeTime(conv.last_message_at)}
+                  </span>
+                </div>
+                <div className="slip__excerpt">
+                  {conv.excerpt || "（未落字）"}
+                </div>
+                <div className="slip__foot">
+                  <span className="slip__gender">
+                    {genderText(conv.gender)}
+                  </span>
+                  <span className="slip__count">{conv.message_count}则</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        {/* ── MIDDLE · 问诊 ── */}
+        <section className="oracle-chat">
+          {messages.length === 0 ? (
+            <div className="oracle-empty oracle-empty--slim">
+              <p className="oracle-empty__hint">新局已开，落字问命。</p>
+            </div>
+          ) : (
+            <div className="message-stream">
+              {messages.map((message) => (
+                <article
+                  key={message.id}
+                  className={`message message--${message.role} ${
+                    message.pending ? "is-pending" : ""
+                  } ${message.error ? "is-error" : ""}`}
+                >
+                  <div className="message__body">
+                    {message.pending ? (
+                      <span className="message__loading">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                    ) : (
+                      message.content
+                    )}
+                  </div>
+                  {!message.pending && (
+                    <div className="message__meta">
+                      {message.role === "assistant" && (
+                        <span className="message__seal">墨</span>
+                      )}
+                      {message.analysis_id && (
+                        <span className="message__id">
+                          {message.analysis_id}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {!message.pending &&
+                    !message.error &&
+                    message.followups &&
+                    message.followups.length > 0 && (
+                      <div className="message__followups">
+                        {message.followups.map((f) => (
+                          <button
+                            key={f}
+                            type="button"
+                            className="followup-chip"
+                            onClick={() => void send(f)}
+                            disabled={loading}
+                          >
+                            {f}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                </article>
+              ))}
+              <div ref={bottomRef} />
+            </div>
+          )}
+
+          <div className="composer">
+            <textarea
+              className="composer__input"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder="生辰、地点、性别，与你想问的事——一句话即可。"
+              rows={3}
+            />
+            <div className="composer__bar">
+              <span className="composer__hint">
+                回车发送 <i>·</i> Shift+回车换行
+              </span>
+              <button
+                type="button"
+                className="composer__send"
+                onClick={() => void send()}
+                disabled={loading || !input.trim()}
+              >
+                {loading ? "推演中" : "送出"}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* ── RIGHT · 案头 ── */}
+        <aside
+          className={`insight-rail ${mobilePanel === "rail" ? "is-open" : ""}`}
+        >
+          <button
+            type="button"
+            className="panel-collapse panel-collapse--rail"
+            onClick={() => setRailCollapsed(true)}
+            aria-label="收起案头"
+          >
+            〉
+          </button>
+
+          <div className="rail-card">
+            <div className="rail-card__label">当前所问</div>
+            <div className="rail-card__value">
+              {currentTopic || currentConv?.topic
+                ? topicText(currentTopic ?? currentConv?.topic)
+                : "——"}
+            </div>
+            {needsMore && missingLabels && (
+              <div className="rail-card__alert">
+                尚缺 <strong>{missingLabels}</strong>，方可排盘
+              </div>
+            )}
+            {!needsMore && (currentTopic || currentConv?.topic) && (
+              <div className="rail-card__meta">已排盘 · 可续问细节</div>
+            )}
+          </div>
+
+          {birthInfo &&
+            (birthInfo.birth_date ||
+              birthInfo.birth_time ||
+              birthInfo.birth_place) && (
+              <div className="rail-card rail-card--birth">
+                <div className="rail-card__label">生辰</div>
+                <dl className="birth-grid">
+                  {birthInfo.birth_date && (
+                    <div className="birth-row">
+                      <dt>日</dt>
+                      <dd>{birthInfo.birth_date}</dd>
+                    </div>
+                  )}
+                  {birthInfo.birth_time && (
+                    <div className="birth-row">
+                      <dt>时</dt>
+                      <dd>{birthInfo.birth_time}</dd>
+                    </div>
+                  )}
+                  {birthInfo.birth_place && (
+                    <div className="birth-row">
+                      <dt>地</dt>
+                      <dd>{birthInfo.birth_place}</dd>
+                    </div>
+                  )}
+                  <div className="birth-row">
+                    <dt>造</dt>
+                    <dd>{genderText(birthInfo.gender)}</dd>
+                  </div>
+                </dl>
+              </div>
+            )}
+
+          {railFollowups.length > 0 && (
+            <div className="rail-card">
+              <div className="rail-card__label">可续问</div>
+              <div className="rail-chips">
+                {railFollowups.map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    className="rail-chip"
+                    onClick={() => void send(f)}
+                    disabled={loading}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </aside>
+      </main>
+
+      {/* ── Desktop reopen tabs (shown when a panel is collapsed) ── */}
+      <button
+        type="button"
+        className={`edge-tab edge-tab--left ${archiveCollapsed ? "is-visible" : ""}`}
+        onClick={() => setArchiveCollapsed(false)}
+        aria-label="展开案卷"
+      >
+        案〉
+      </button>
+      <button
+        type="button"
+        className={`edge-tab edge-tab--right ${railCollapsed ? "is-visible" : ""}`}
+        onClick={() => setRailCollapsed(false)}
+        aria-label="展开案头"
+      >
+        〈注
+      </button>
+
+      {mobilePanel && (
+        <div
+          className="oracle__scrim"
+          onClick={() => setMobilePanel(null)}
+          aria-hidden
+        />
+      )}
+    </div>
+  );
+}

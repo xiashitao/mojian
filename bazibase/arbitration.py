@@ -173,12 +173,23 @@ class ArbitrationResult:
 # ---------------------------------------------------------------------------
 
 def _detect_rescue_cases(d: Diagnosis) -> list[ArbitrationCase]:
-    """Detect 救应 cases where 相神 may not control 忌神 in 五行 terms.
+    """Detect 救应 cases where the rescue is structurally invalid.
 
     v0.2.2's `_find_rescue_gods()` treats any 相神 as a potential 救神.
-    But in strict 子平派, the rescue is only valid if the 相神's element
-    actually controls the 忌神's element. E.g., 印(木) cannot rescue
-    from 财(金) because 金克木.
+    Many of those rescues are perfectly valid (e.g., 印制伤官 where
+    印木克伤官土). We only flag rescues that are **structurally
+    questionable** in five-element terms:
+
+    1. **忌克救** — the 忌神's element conquers the rescue god's element.
+       The 忌神 can destroy the rescue mechanism entirely.
+       Example: 忌庚辛(金) vs 救甲(木) → 金克木，忌神可坏救神。
+
+    2. **救生忌** — the rescue god's element produces the 忌神's element.
+       The rescue god actually strengthens the enemy it's supposed to control.
+       Example: 救丁(火) vs 忌戊(土) → 火生土，救神反助忌神。
+
+    Cases where neither applies (忌生救、救克忌、纯比劫关系) are
+    structurally sound and do not need LLM arbitration.
     """
     cases: list[ArbitrationCase] = []
     if d.cheng_bai.verdict != "救应":
@@ -188,45 +199,55 @@ def _detect_rescue_cases(d: Diagnosis) -> list[ArbitrationCase]:
     xs = d.xiang_shen
     ys = d.yong_shen
 
-    # For each (忌神, 救神) pair, check if 救神's element controls 忌神's
     for ji in xs.ji_shen:
         for rescue in cb.rescue_gods:
             ji_el = STEM_ELEMENT.get(ji.stem, "?")
             rescue_el = STEM_ELEMENT.get(rescue.stem, "?")
-            # Does rescue_el conquer ji_el?
-            can_control = ELEMENT_CONQUEST.get(rescue_el) == ji_el
-            if not can_control:
-                cases.append(ArbitrationCase(
-                    case_id=f"RESCUE-{len(cases)+1:03d}",
-                    category="RESCUE",
-                    title=f"救神{rescue.stem}({rescue_el})能否制忌神{ji.stem}({ji_el})",
-                    description=(
-                        f"v0.2.2 判定为救应：相神{rescue.stem}({rescue.ten_god}) "
-                        f"被视为救神，可制忌神{ji.stem}({ji.ten_god})。"
-                        f"但从五行看，{rescue_el}不克{ji_el}"
-                        f"（{rescue_el}克{ELEMENT_CONQUEST.get(rescue_el, '?')}，"
-                        f"非{ji_el}），救神未必能制忌神。"
-                        f"请判断此救应是否真正成立。"
-                    ),
-                    evidence={
-                        "yong_shen": ys.stem,
-                        "yong_shen_ten_god": ys.ten_god,
-                        "ji_shen": ji.stem,
-                        "ji_shen_ten_god": ji.ten_god,
-                        "ji_shen_element": ji_el,
-                        "rescue_god": rescue.stem,
-                        "rescue_ten_god": rescue.ten_god,
-                        "rescue_element": rescue_el,
-                        "rescue_conquers_ji": can_control,
-                    },
-                    relevant_rules=("ZP-JIUYING-001", "ZP-XIANG-001", "ZP-JI-001"),
-                    options=(
-                        "救应成立（虽五行不克，但位置/力量足以制化）",
-                        "救应不成立（五行不克，相神无力救应）",
-                        "无法判定",
-                    ),
-                ))
-                break  # one case per 忌神 is enough
+
+            # Two structural red flags:
+            ji_destroys_rescue = ELEMENT_CONQUEST.get(ji_el) == rescue_el
+            rescue_feeds_ji = ELEMENT_PRODUCTION.get(rescue_el) == ji_el
+
+            if not (ji_destroys_rescue or rescue_feeds_ji):
+                continue  # structurally sound, no arbitration needed
+
+            if ji_destroys_rescue:
+                title = f"忌神{ji.stem}({ji_el})克救神{rescue.stem}({rescue_el})"
+                five_reason = f"{ji_el}克{rescue_el}，忌神可破救神"
+            else:
+                title = f"救神{rescue.stem}({rescue_el})生忌神{ji.stem}({ji_el})"
+                five_reason = f"{rescue_el}生{ji_el}，救神反助忌神"
+
+            cases.append(ArbitrationCase(
+                case_id=f"RESCUE-{len(cases)+1:03d}",
+                category="RESCUE",
+                title=title,
+                description=(
+                    f"规则引擎判定为救应：相神{rescue.stem}({rescue.ten_god}) "
+                    f"被视为救神，可制忌神{ji.stem}({ji.ten_god})。"
+                    f"但从五行看，{five_reason}，救应存疑。"
+                    f"请判断此救应是否真正成立。"
+                ),
+                evidence={
+                    "yong_shen": ys.stem,
+                    "yong_shen_ten_god": ys.ten_god,
+                    "ji_shen": ji.stem,
+                    "ji_shen_ten_god": ji.ten_god,
+                    "ji_shen_element": ji_el,
+                    "rescue_god": rescue.stem,
+                    "rescue_ten_god": rescue.ten_god,
+                    "rescue_element": rescue_el,
+                    "ji_destroys_rescue": ji_destroys_rescue,
+                    "rescue_feeds_ji": rescue_feeds_ji,
+                },
+                relevant_rules=("ZP-JIUYING-001", "ZP-XIANG-001", "ZP-JI-001"),
+                options=(
+                    "救应成立（虽有五行不利，但位置/力量足以制化）",
+                    "救应不成立（五行不利，相神无力救应）",
+                    "无法判定",
+                ),
+            ))
+            break  # one case per 忌神 is enough
     return cases
 
 
@@ -590,11 +611,20 @@ def parse_arbitration_response(
 
     # Validate decision is one of the options
     valid_options = set(case.options) | {"无法判定"}
-    # Also accept "无法判定" even if not in options (LLM safety valve)
     if decision not in valid_options:
-        raise ArbitrationParseError(
-            f"Decision {decision!r} not in valid options: {valid_options}"
-        )
+        # Fuzzy match: LLMs often shorten options by dropping the
+        # parenthetical explanation (e.g., "合绊" instead of
+        # "合绊（化神无力，合而不化）"). Match against the "core"
+        # of each option (text before the first full-width parenthesis).
+        for opt in case.options:
+            opt_core = opt.split("（")[0].split("(")[0].strip()
+            if opt_core and decision.strip() == opt_core:
+                decision = opt
+                break
+        else:
+            raise ArbitrationParseError(
+                f"Decision {decision!r} not in valid options: {valid_options}"
+            )
 
     # Validate confidence range
     if not (0.0 <= confidence <= 1.0):

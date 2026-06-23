@@ -42,7 +42,9 @@ class TestDetectRescueCases:
         assert "ji_shen" in rescue.evidence
         assert "rescue_god" in rescue.evidence
         assert "rescue_element" in rescue.evidence
-        assert rescue.evidence["rescue_conquers_ji"] is False
+        # 1893 chart: 忌(金)克救(木) → ji_destroys_rescue is True
+        assert rescue.evidence["ji_destroys_rescue"] is True
+        assert rescue.evidence["rescue_feeds_ji"] is False
 
     def test_cheng_ge_chart_has_no_rescue_cases(self):
         # 2000-06-15 is 成格 (no 忌神) → no RESCUE cases
@@ -250,6 +252,23 @@ class TestParseResponse:
         resp = parse_arbitration_response(case, raw)
         assert resp.decision == "无法判定"
         assert resp.is_unresolved() is True
+
+    def test_fuzzy_match_shortened_option(self):
+        # LLMs often shorten options by dropping the parenthetical
+        # explanation. The parser should match the core keyword.
+        case = self._make_case()
+        # Pick an option with a parenthetical, use its core only
+        full_opt = case.options[0]
+        core = full_opt.split("（")[0].split("(")[0].strip()
+        raw = json.dumps({
+            "decision": core,
+            "reasoning": "test",
+            "confidence": 0.8,
+            "cited_rules": [],
+        }, ensure_ascii=False)
+        resp = parse_arbitration_response(case, raw)
+        # Should be normalized to the full option
+        assert resp.decision == full_opt
 
 
 # ---------------------------------------------------------------------------
