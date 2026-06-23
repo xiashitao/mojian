@@ -1,5 +1,6 @@
 """FastAPI app — bazibase web backend entry point."""
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 # Add bazibase project root to sys.path so `import bazibase` works
@@ -13,11 +14,20 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .database import init_db
 from .routers import chart, arbitrate, charts_store, chat, admin, conversations
+from .routers import auth as auth_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
 
 app = FastAPI(
-    title="bazibase Web API",
-    description="Ba Zi 排盘 / 诊断 / LLM 仲裁",
-    version="0.1.0",
+    title="Kairos API",
+    description="AI 决策助手 — Ba Zi 排盘 / 诊断 / LLM 仲裁",
+    version="0.2.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -29,17 +39,13 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
-def _startup():
-    init_db()
-
-
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
 
 
 # Register routers under /api prefix
+app.include_router(auth_router.router, prefix="/api")
 app.include_router(chart.router, prefix="/api")
 app.include_router(arbitrate.router, prefix="/api")
 app.include_router(charts_store.router, prefix="/api")

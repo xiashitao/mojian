@@ -190,7 +190,7 @@ def handle_chat(message: str, conversation_id: str | None = None) -> dict[str, A
     }
 
 
-def stream_chat(message: str, conversation_id: str | None = None) -> Iterator[str]:
+def stream_chat(message: str, conversation_id: str | None = None, *, user_id: str | None = None) -> Iterator[str]:
     """Stream one user message response as newline-delimited JSON chunks.
 
     Yields:
@@ -201,7 +201,7 @@ def stream_chat(message: str, conversation_id: str | None = None) -> Iterator[st
           {"type": "error", "detail": "..."}  — on failure
     """
     started = time.monotonic()
-    conversation = repository.ensure_conversation(conversation_id)
+    conversation = repository.ensure_conversation(conversation_id, user_id=user_id)
     conv_id = conversation["id"]
     user_message = repository.add_message(conv_id, "user", message)
     analysis_id = _new_unique_analysis_id()

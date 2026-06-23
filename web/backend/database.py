@@ -2,6 +2,23 @@
 import sqlite3
 from .config import DB_PATH
 
+_CREATE_USERS = """
+CREATE TABLE IF NOT EXISTS users (
+    id            TEXT PRIMARY KEY,
+    email         TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    name          TEXT NOT NULL DEFAULT '',
+    role          TEXT NOT NULL DEFAULT 'user'
+                  CHECK(role IN ('user', 'pro', 'max', 'admin')),
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+)
+"""
+
+_CREATE_USERS_INDEX = (
+    "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
+)
+
 _CREATE_SAVED_CHARTS = """
 CREATE TABLE IF NOT EXISTS saved_charts (
     id          TEXT PRIMARY KEY,
@@ -99,12 +116,15 @@ def get_db() -> sqlite3.Connection:
 def init_db():
     conn = get_db()
     try:
+        conn.execute(_CREATE_USERS)
         conn.execute(_CREATE_SAVED_CHARTS)
         conn.execute(_CREATE_CONVERSATIONS)
         conn.execute(_CREATE_MESSAGES)
         conn.execute(_CREATE_AGENT_RUNS)
         conn.execute(_CREATE_RUN_TRACES)
         for statement in _CREATE_INDEXES:
+            conn.execute(statement)
+        for statement in _CREATE_USERS_INDEX:
             conn.execute(statement)
         conn.commit()
     finally:

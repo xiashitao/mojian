@@ -1,4 +1,5 @@
 """Settings: read from .env file."""
+import secrets
 from pathlib import Path
 from pydantic_settings import BaseSettings
 
@@ -12,6 +13,10 @@ class Settings(BaseSettings):
     deepseek_model: str = "deepseek-chat"
 
     database_path: str = "charts.db"
+
+    jwt_secret: str = secrets.token_hex(32)
+    jwt_algorithm: str = "HS256"
+    jwt_expire_days: int = 30
 
     class Config:
         env_file = str(WEB_DIR / ".env")

@@ -22,7 +22,7 @@ def _load(text: str | None, default: Any) -> Any:
         return default
 
 
-def ensure_conversation(conversation_id: str | None) -> dict:
+def ensure_conversation(conversation_id: str | None, *, user_id: str | None = None) -> dict:
     """Load an existing conversation or create a new one."""
     conn = get_db()
     try:
@@ -35,9 +35,9 @@ def ensure_conversation(conversation_id: str | None) -> dict:
 
         new_conversation_id = new_id("conv")
         conn.execute(
-            """INSERT INTO conversations (id, title, last_message_at, metadata_json)
-               VALUES (?, ?, datetime('now'), ?)""",
-            (new_conversation_id, "新命理咨询", _dump({})),
+            """INSERT INTO conversations (id, user_id, title, last_message_at, metadata_json)
+               VALUES (?, ?, ?, datetime('now'), ?)""",
+            (new_conversation_id, user_id, "新咨询", _dump({})),
         )
         conn.commit()
         row = conn.execute(
@@ -175,25 +175,42 @@ def add_trace(
         conn.close()
 
 
-def list_conversations(limit: int = 50) -> list[dict]:
+def list_conversations(limit: int = 50, user_id: str | None = None) -> list[dict]:
     """List conversations ordered by most recent activity, with topic + excerpt."""
     conn = get_db()
     try:
-        rows = conn.execute(
-            """SELECT
-                   c.id, c.title, c.metadata_json, c.status,
-                   c.created_at, c.updated_at, c.last_message_at,
-                   (SELECT COUNT(*) FROM messages m
-                    WHERE m.conversation_id = c.id) AS message_count,
-                   (SELECT m2.content FROM messages m2
-                    WHERE m2.conversation_id = c.id AND m2.role = 'user'
-                    ORDER BY m2.created_at ASC LIMIT 1) AS excerpt
-               FROM conversations c
-               WHERE c.status = 'active'
-               ORDER BY c.last_message_at DESC, c.created_at DESC
-               LIMIT ?""",
-            (limit,),
-        ).fetchall()
+        if user_id:
+            rows = conn.execute(
+                """SELECT
+                       c.id, c.title, c.metadata_json, c.status,
+                       c.created_at, c.updated_at, c.last_message_at,
+                       (SELECT COUNT(*) FROM messages m
+                        WHERE m.conversation_id = c.id) AS message_count,
+                       (SELECT m2.content FROM messages m2
+                        WHERE m2.conversation_id = c.id AND m2.role = 'user'
+                        ORDER BY m2.created_at ASC LIMIT 1) AS excerpt
+                   FROM conversations c
+                   WHERE c.status = 'active' AND c.user_id = ?
+                   ORDER BY c.last_message_at DESC, c.created_at DESC
+                   LIMIT ?""",
+                (user_id, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT
+                       c.id, c.title, c.metadata_json, c.status,
+                       c.created_at, c.updated_at, c.last_message_at,
+                       (SELECT COUNT(*) FROM messages m
+                        WHERE m.conversation_id = c.id) AS message_count,
+                       (SELECT m2.content FROM messages m2
+                        WHERE m2.conversation_id = c.id AND m2.role = 'user'
+                        ORDER BY m2.created_at ASC LIMIT 1) AS excerpt
+                   FROM conversations c
+                   WHERE c.status = 'active'
+                   ORDER BY c.last_message_at DESC, c.created_at DESC
+                   LIMIT ?""",
+                (limit,),
+            ).fetchall()
         result = []
         for row in rows:
             d = dict(row)
