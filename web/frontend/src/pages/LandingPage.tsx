@@ -4,9 +4,9 @@ import logo from "../assets/logo.png";
 import { ThemeSwitcher } from "../theme";
 
 const PLACEHOLDERS = [
-  "1990年5月15日早上8点半，北京出生，男，想看事业",
+  "1990年5月15日，北京出生，男，事业方向怎么选？",
   "我适合创业还是稳定上班？",
-  "我想看感情里的相处模式",
+  "下个月签约时机合适吗？",
   "我的性格优势和短板是什么？",
 ];
 
@@ -44,8 +44,8 @@ export default function LandingPage() {
 
       <header className="oracle-header oracle-header--landing">
         <div className="oracle-header__brand">
-          <img className="oracle-header__logo" src={logo} alt="墨鉴" />
-          <span className="oracle-header__mark">墨鉴</span>
+          <img className="oracle-header__logo" src={logo} alt="Kairos" />
+          <span className="oracle-header__mark">Kairos</span>
         </div>
         <nav className="oracle-header__actions">
           <ThemeSwitcher />
@@ -54,20 +54,20 @@ export default function LandingPage() {
             className="oracle-header__cta"
             onClick={() => navigate("/session")}
           >
-            开始问诊
+            开始对话
           </button>
         </nav>
       </header>
 
       <main className="landing__main">
         <section className="landing__hero" aria-labelledby="landing-title">
-          <img className="landing__hero-logo" src={logo} alt="墨鉴" />
-          <div className="oracle-empty__eyebrow">问事入盘 · 观时识势</div>
+          <img className="landing__hero-logo" src={logo} alt="Kairos" />
+          <div className="oracle-empty__eyebrow">看清局势 · 把握时机</div>
           <h1 id="landing-title" className="oracle-empty__title">
-            墨鉴
+            Kairos
           </h1>
           <p className="oracle-empty__text">
-            说出生辰、地点、性别和所问之事，我会从时间与结构出发，帮你看清当下的走向与选择边界。
+            告诉我你的出生信息和想了解的问题，我会从多个维度帮你分析当下的走向，给出有参考价值的建议。
           </p>
 
           <form
@@ -88,7 +88,7 @@ export default function LandingPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                aria-label="输入想咨询的问题"
+                aria-label="输入你的问题"
                 autoFocus
               />
             </div>

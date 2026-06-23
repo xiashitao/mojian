@@ -69,35 +69,63 @@ export function useTheme() {
   return value;
 }
 
+const THEME_CYCLE: ThemeMode[] = ["system", "light", "dark"];
+const THEME_LABEL: Record<ThemeMode, string> = {
+  system: "跟随系统",
+  light: "浅色模式",
+  dark: "深色模式",
+};
+
+const ThemeIcon = ({ mode }: { mode: ThemeMode }) => {
+  if (mode === "light")
+    return (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+        <circle cx="8" cy="8" r="3" />
+        <line x1="8" y1="1.5" x2="8" y2="3" />
+        <line x1="8" y1="13" x2="8" y2="14.5" />
+        <line x1="1.5" y1="8" x2="3" y2="8" />
+        <line x1="13" y1="8" x2="14.5" y2="8" />
+        <line x1="3.4" y1="3.4" x2="4.5" y2="4.5" />
+        <line x1="11.5" y1="11.5" x2="12.6" y2="12.6" />
+        <line x1="3.4" y1="12.6" x2="4.5" y2="11.5" />
+        <line x1="11.5" y1="4.5" x2="12.6" y2="3.4" />
+      </svg>
+    );
+  if (mode === "dark")
+    return (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+        <path d="M13.2 10.5A5.5 5.5 0 0 1 5.5 2.8a5.5 5.5 0 1 0 7.7 7.7Z" />
+      </svg>
+    );
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+      <circle cx="8" cy="8" r="3" />
+      <path d="M8 5V2.5" />
+      <path d="M8 13.5V11" />
+      <path d="M5 8H2.5" />
+      <path d="M13.5 8H11" />
+      <path d="M8 5a3 3 0 0 1 3 3H8Z" fill="currentColor" opacity="0.4" stroke="none" />
+    </svg>
+  );
+};
+
 export function ThemeSwitcher() {
   const { mode, setMode } = useTheme();
 
+  const next = () => {
+    const i = THEME_CYCLE.indexOf(mode);
+    setMode(THEME_CYCLE[(i + 1) % THEME_CYCLE.length]);
+  };
+
   return (
-    <div className="theme-switch" role="group" aria-label="主题切换">
-      <button
-        type="button"
-        className={`theme-switch__item ${mode === "light" ? "is-active" : ""}`}
-        aria-pressed={mode === "light"}
-        onClick={() => setMode("light")}
-      >
-        浅色
-      </button>
-      <button
-        type="button"
-        className={`theme-switch__item ${mode === "system" ? "is-active" : ""}`}
-        aria-pressed={mode === "system"}
-        onClick={() => setMode("system")}
-      >
-        跟随
-      </button>
-      <button
-        type="button"
-        className={`theme-switch__item ${mode === "dark" ? "is-active" : ""}`}
-        aria-pressed={mode === "dark"}
-        onClick={() => setMode("dark")}
-      >
-        深色
-      </button>
-    </div>
+    <button
+      type="button"
+      className="theme-toggle-btn"
+      onClick={next}
+      aria-label={`当前主题：${THEME_LABEL[mode]}，点击切换`}
+      title={THEME_LABEL[mode]}
+    >
+      <ThemeIcon mode={mode} />
+    </button>
   );
 }

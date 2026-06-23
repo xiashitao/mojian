@@ -107,8 +107,8 @@ function topicText(topic: Topic | string | null | undefined): string {
 }
 
 function genderText(g: string | null | undefined): string {
-  if (g === "male") return "乾造";
-  if (g === "female") return "坤造";
+  if (g === "male") return "男";
+  if (g === "female") return "女";
   return "——";
 }
 
@@ -121,7 +121,7 @@ function relativeTime(sqliteTs: string | null | undefined): string {
   const min = Math.floor(diff / 60000);
   const hr = Math.floor(diff / 3600000);
   const day = Math.floor(diff / 86400000);
-  if (min < 1) return "方才";
+  if (min < 1) return "刚刚";
   if (min < 60) return `${min}分前`;
   if (hr < 24) return `${hr}时前`;
   if (day === 1) return "昨日";
@@ -357,7 +357,7 @@ export default function SessionPage() {
           item.id === pendingId
             ? {
                 ...item,
-                content: `这一卦未能成象：${message}`,
+                content: `分析未能完成：${message}`,
                 pending: false,
                 error: true,
               }
@@ -441,13 +441,13 @@ export default function SessionPage() {
           <img
             className="oracle-header__logo"
             src={logo}
-            alt="墨鉴"
+            alt="Kairos"
             role="button"
             onClick={() => navigate("/")}
           />
-          <span className="oracle-header__mark">墨鉴</span>
+          <span className="oracle-header__mark">Kairos</span>
           <span className="oracle-header__rule" aria-hidden />
-          <span className="oracle-header__sub">天命可鉴，来者可问。</span>
+          <span className="oracle-header__sub">看清局势 · 把握时机</span>
           <button
             type="button"
             className="oracle-header__nav oracle-header__nav--right"
@@ -472,8 +472,13 @@ export default function SessionPage() {
           className={`archive ${mobilePanel === "archive" ? "is-open" : ""}`}
         >
           <div className="archive__head">
-            <span className="archive__label">案卷</span>
-            <span className="archive__tag">ANS</span>
+            <button
+              type="button"
+              className={`archive__new-sm ${!conversationId ? "is-active" : ""}`}
+              onClick={startNew}
+            >
+              ＋ 新对话
+            </button>
             <button
               type="button"
               className="panel-collapse panel-collapse--archive"
@@ -483,22 +488,12 @@ export default function SessionPage() {
               〈
             </button>
           </div>
-          <button
-            type="button"
-            className={`archive__new ${
-              !conversationId ? "is-active" : ""
-            }`}
-            onClick={startNew}
-          >
-            <span className="archive__new-mark">＋</span>
-            <span className="archive__new-text">新开一局</span>
-          </button>
           <div className="archive__list">
             {conversations.length === 0 && (
               <div className="archive__empty">
-                <span>尚无案卷</span>
+                <span>暂无对话</span>
                 <span className="archive__empty-hint">
-                  送出第一句即开卷
+                  发送第一条消息开始
                 </span>
               </div>
             )}
@@ -526,13 +521,13 @@ export default function SessionPage() {
                   </span>
                 </div>
                 <div className="slip__excerpt">
-                  {conv.excerpt || "（未落字）"}
+                  {conv.excerpt || "（无内容）"}
                 </div>
                 <div className="slip__foot">
                   <span className="slip__gender">
                     {genderText(conv.gender)}
                   </span>
-                  <span className="slip__count">{conv.message_count}则</span>
+                  <span className="slip__count">{conv.message_count}条</span>
                 </div>
               </button>
             ))}
@@ -543,7 +538,7 @@ export default function SessionPage() {
         <section className="oracle-chat">
           {messages.length === 0 ? (
             <div className="oracle-empty oracle-empty--slim">
-              <p className="oracle-empty__hint">新局已开，落字问命。</p>
+              <p className="oracle-empty__hint">有什么想了解的，直接问我。</p>
             </div>
           ) : (
             <div className="message-stream">
@@ -565,16 +560,11 @@ export default function SessionPage() {
                       message.content
                     )}
                   </div>
-                  {!message.pending && (
+                  {!message.pending && message.analysis_id && (
                     <div className="message__meta">
-                      {message.role === "assistant" && (
-                        <span className="message__seal">墨</span>
-                      )}
-                      {message.analysis_id && (
-                        <span className="message__id">
-                          {message.analysis_id}
-                        </span>
-                      )}
+                      <span className="message__id">
+                        {message.analysis_id}
+                      </span>
                     </div>
                   )}
                   {!message.pending &&
@@ -607,7 +597,7 @@ export default function SessionPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder="生辰、地点、性别，与你想问的事——一句话即可。"
+              placeholder="出生日期、地点、性别，以及你想了解的问题。"
               rows={3}
             />
             <div className="composer__bar">
@@ -620,7 +610,7 @@ export default function SessionPage() {
                 onClick={() => void send()}
                 disabled={loading || !input.trim()}
               >
-                {loading ? "推演中" : "送出"}
+                {loading ? "分析中" : "发送"}
               </button>
             </div>
           </div>
@@ -640,7 +630,7 @@ export default function SessionPage() {
           </button>
 
           <div className="rail-card">
-            <div className="rail-card__label">当前所问</div>
+            <div className="rail-card__label">当前话题</div>
             <div className="rail-card__value">
               {currentTopic || currentConv?.topic
                 ? topicText(currentTopic ?? currentConv?.topic)
@@ -648,11 +638,11 @@ export default function SessionPage() {
             </div>
             {needsMore && missingLabels && (
               <div className="rail-card__alert">
-                尚缺 <strong>{missingLabels}</strong>，方可排盘
+                还需要 <strong>{missingLabels}</strong> 才能开始分析
               </div>
             )}
             {!needsMore && (currentTopic || currentConv?.topic) && (
-              <div className="rail-card__meta">已排盘 · 可续问细节</div>
+              <div className="rail-card__meta">分析完成 · 可继续提问</div>
             )}
           </div>
 
@@ -691,7 +681,7 @@ export default function SessionPage() {
 
           {railFollowups.length > 0 && (
             <div className="rail-card">
-              <div className="rail-card__label">可续问</div>
+              <div className="rail-card__label">继续了解</div>
               <div className="rail-chips">
                 {railFollowups.map((f) => (
                   <button
