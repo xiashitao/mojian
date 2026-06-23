@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     jwt_secret: str = secrets.token_hex(32)
     jwt_algorithm: str = "HS256"
     jwt_expire_days: int = 30
+    cookie_secure: bool = True  # set False in local dev (.env: COOKIE_SECURE=false)
 
     class Config:
         env_file = str(WEB_DIR / ".env")
