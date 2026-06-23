@@ -5,8 +5,17 @@ from datetime import datetime
 from typing import Any
 
 from bazibase import cast_chart, diagnose
-from bazibase.arbitration import prepare_arbitration
+from bazibase.arbitration import (
+    ArbitrationParseError,
+    ArbitrationResponse,
+    ArbitrationResult,
+    attach_response,
+    parse_arbitration_response,
+    prepare_arbitration,
+)
 
+from ..config import settings
+from ..services.deepseek import DeepSeekAPIError, call_deepseek
 from .models import BirthInfo
 from ..services.enrich import enrich_chart
 
@@ -26,6 +35,7 @@ def run_bazibase_tools(birth_info: BirthInfo) -> dict[str, Any]:
     )
     diagnosis = diagnose(chart)
     arbitration = prepare_arbitration(diagnosis)
+    arbitration = _resolve_arbitration(arbitration)
 
     return {
         "chart": enrich_chart(chart.to_dict()),
@@ -33,6 +43,33 @@ def run_bazibase_tools(birth_info: BirthInfo) -> dict[str, Any]:
         "diagnosis_summary": diagnosis.summary(),
         "arbitration": _arbitration_to_dict(arbitration),
     }
+
+
+def _resolve_arbitration(result: ArbitrationResult) -> ArbitrationResult:
+    """Send each arbitration prompt to DeepSeek and parse responses."""
+    if not settings.deepseek_api_key or not result.prompts:
+        return result
+
+    for prompt in result.prompts:
+        try:
+            raw = call_deepseek(
+                prompt.system_prompt,
+                prompt.user_prompt,
+                temperature=0.0,
+            )
+            response = parse_arbitration_response(prompt.case, raw)
+            result = attach_response(result, prompt.case.case_id, response)
+        except (DeepSeekAPIError, ArbitrationParseError):
+            fallback = ArbitrationResponse(
+                case_id=prompt.case.case_id,
+                decision="无法判定",
+                reasoning="LLM 调用或解析失败",
+                confidence=0.0,
+                cited_rules=(),
+                raw_response=None,
+            )
+            result = attach_response(result, prompt.case.case_id, fallback)
+    return result
 
 
 def _parse_birth_datetime(date: str | None, time: str | None) -> datetime:
@@ -47,7 +84,28 @@ def _parse_birth_datetime(date: str | None, time: str | None) -> datetime:
     raise ValueError(f"Cannot parse birth datetime: {combined!r}")
 
 
-def _arbitration_to_dict(result) -> dict[str, Any]:
+def _arbitration_to_dict(result: ArbitrationResult) -> dict[str, Any]:
+    resolved = 0
+    unresolved = 0
+    responses_dict: dict[str, Any] = {}
+
+    for c in result.cases:
+        r = result.responses.get(c.case_id)
+        if r is not None:
+            responses_dict[c.case_id] = {
+                "decision": r.decision,
+                "reasoning": r.reasoning,
+                "confidence": r.confidence,
+                "cited_rules": list(r.cited_rules),
+                "raw_response": r.raw_response,
+            }
+            if r.is_unresolved():
+                unresolved += 1
+            else:
+                resolved += 1
+        else:
+            unresolved += 1
+
     return {
         "cases": [
             {
@@ -70,11 +128,11 @@ def _arbitration_to_dict(result) -> dict[str, Any]:
             }
             for p in result.prompts
         ],
-        "responses": {},
+        "responses": responses_dict,
         "summary": {
             "total": len(result.cases),
-            "resolved": 0,
-            "unresolved": len(result.cases),
+            "resolved": resolved,
+            "unresolved": unresolved,
             "errors": 0,
         },
     }

@@ -106,7 +106,20 @@ def _context_from_tool_result(
     cheng = diagnosis.get("cheng_bai", {})
     strength = chart.get("strength", {})
     cases = arbitration.get("cases", [])
-    conservative = bool(cases)
+    responses = arbitration.get("responses", {})
+    summary = arbitration.get("summary", {})
+
+    arbitration_decisions = {}
+    for case_id, resp in responses.items():
+        if resp.get("decision") != "无法判定":
+            arbitration_decisions[case_id] = {
+                "decision": resp["decision"],
+                "confidence": resp.get("confidence", 0.0),
+                "reasoning": resp.get("reasoning", ""),
+            }
+
+    has_unresolved = summary.get("unresolved", 0) > 0
+
     return {
         "day_master": chart.get("day_master"),
         "day_master_element": chart.get("day_master_element"),
@@ -114,7 +127,8 @@ def _context_from_tool_result(
         "ge_ju": ge.get("name"),
         "yong_shen_ten_god": yong.get("ten_god"),
         "cheng_bai": cheng.get("verdict"),
-        "has_arbitration_cases": conservative,
+        "has_unresolved_cases": has_unresolved,
+        "arbitration_decisions": arbitration_decisions,
         "source_basis": source_basis,
     }
 
@@ -191,7 +205,7 @@ def _pressure_phrase(ctx: dict[str, Any]) -> str:
 
 
 def _conservative_prefix(ctx: dict[str, Any]) -> str:
-    if ctx.get("has_arbitration_cases"):
+    if ctx.get("has_unresolved_cases"):
         return "这里有判断点不宜说得太满，我会把结论说得保守一些。"
     return ""
 
@@ -238,7 +252,8 @@ def _build_reply_prompt(
             "ge_ju": context.get("ge_ju"),
             "yong_shen_ten_god": context.get("yong_shen_ten_god"),
             "cheng_bai": context.get("cheng_bai"),
-            "has_arbitration_cases": context.get("has_arbitration_cases"),
+            "has_unresolved_cases": context.get("has_unresolved_cases"),
+            "arbitration_decisions": context.get("arbitration_decisions", {}),
         },
         "response_policy": {
             "tone": "consultation",

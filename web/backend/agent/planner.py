@@ -104,15 +104,12 @@ def handle_chat(message: str, conversation_id: str | None = None) -> dict[str, A
                 "prepare_arbitration",
                 input_data={"diagnosis_summary": tool_result.get("diagnosis_summary")},
                 output_data=tool_result["arbitration"],
-                summary=f"Detected {tool_result['arbitration']['summary']['total']} arbitration cases.",
+                summary=(
+                    f"Detected {tool_result['arbitration']['summary']['total']} arbitration cases. "
+                    f"Resolved: {tool_result['arbitration']['summary']['resolved']}, "
+                    f"Unresolved: {tool_result['arbitration']['summary']['unresolved']}."
+                ),
             )
-            if tool_result["arbitration"]["summary"]["total"] and not settings.deepseek_api_key:
-                tracer.add(
-                    "call_arbitration_llm",
-                    input_data={"provider": "deepseek"},
-                    output_data={"status": "skipped", "reason": "DEEPSEEK_API_KEY not configured"},
-                    summary="Skipped arbitration LLM call because no provider is configured.",
-                )
 
             clarify = extraction.intent == "clarify_previous"
             reply, chat_state, generation_trace = build_consultation_reply(

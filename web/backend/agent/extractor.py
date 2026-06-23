@@ -1,8 +1,16 @@
-"""Rule-based MVP extraction for chat intent, topic, and birth info."""
+"""Extraction for chat intent, topic, and birth info.
+
+Primary path: LLM-based extraction via DeepSeek (handles freeform input,
+Chinese lunar dates, dialectal time expressions, any city).
+Fallback: regex-based extraction (no API key or LLM call failure).
+"""
 from __future__ import annotations
 
+import json
 import re
 
+from ..config import settings
+from ..services.deepseek import DeepSeekAPIError, call_deepseek
 from .models import BirthInfo, ExtractionResult, Intent, Topic
 
 
@@ -40,9 +48,57 @@ _TOPIC_KEYWORDS: list[tuple[Topic, tuple[str, ...]]] = [
     ("personality", ("性格", "优势", "短板", "缺点", "特点", "人格")),
 ]
 
+_EXTRACT_SYSTEM_PROMPT = """\
+你是一个信息提取器。从用户消息中提取以下信息，输出严格 JSON，不要输出任何额外文本。
+
+## 提取字段
+
+1. **intent**: 用户意图。必须是以下之一：
+   - "career" — 问事业、工作、创业、行业相关
+   - "relationship" — 问感情、婚姻、恋爱相关
+   - "wealth" — 问财运、收入、投资相关
+   - "personality" — 问性格、优势、短板相关
+   - "clarify_previous" — 追问上一轮回答的原因或依据
+   - "collect_birth_info" — 只提供了出生信息，没有明确问题
+   - "unknown" — 无法判断
+
+2. **topic**: 咨询方向。"career"/"relationship"/"wealth"/"personality" 或 null
+
+3. **birth_date**: 公历出生日期，格式 "YYYY-MM-DD"。如果用户说的是农历/阴历，你需要转换为公历。如果说"九零年"则为1990年。如果无法确定则输出 null。
+
+4. **birth_time**: 出生时间，格式 "HH:MM"（24小时制）。"辰时"=07:30, "巳时"=09:30, "午时"=11:30, "未时"=13:30, "申时"=15:30, "酉时"=17:30, "戌时"=19:30, "亥时"=21:30, "子时"=23:30, "丑时"=01:30, "寅时"=03:30, "卯时"=05:30。"早上八点半"=08:30。如果无法确定则输出 null。
+
+5. **birth_place**: 出生地城市名（如"温州"、"北京"），如果无法确定则输出 null。
+
+6. **longitude**: 出生地的近似经度（浮点数）。中国主要城市经度范围 73-135。如果用户没提到地点则输出 null。
+
+7. **gender**: "male" 或 "female" 或 null。
+
+## 输出格式
+
+```json
+{
+  "intent": "career",
+  "topic": "career",
+  "birth_date": "1990-05-15",
+  "birth_time": "08:30",
+  "birth_place": "北京",
+  "longitude": 116.4,
+  "gender": "male"
+}
+```
+
+注意：
+- 农历日期必须转换为公历。如果不确定农历对应的公历，输出 null 并在 intent 中标记 collect_birth_info。
+- 只提取消息中明确提到的信息，不要猜测。
+- 不要输出 JSON 以外的任何内容。"""
+
 
 def extract_message(message: str) -> ExtractionResult:
     text = message.strip()
+    llm_result = _extract_with_llm(text)
+    if llm_result is not None:
+        return llm_result
     topic = _detect_topic(text)
     intent = _detect_intent(text, topic)
     birth_info = _extract_birth_info(text)
@@ -51,6 +107,75 @@ def extract_message(message: str) -> ExtractionResult:
         topic=topic,
         birth_info=birth_info,
         raw_text=message,
+    )
+
+
+def _extract_with_llm(text: str) -> ExtractionResult | None:
+    if not settings.deepseek_api_key:
+        return None
+    try:
+        raw = call_deepseek(
+            _EXTRACT_SYSTEM_PROMPT,
+            text,
+            temperature=0.0,
+        )
+        data = json.loads(raw)
+    except (DeepSeekAPIError, json.JSONDecodeError, ValueError):
+        return None
+
+    intent = data.get("intent", "unknown")
+    if intent not in ("career", "relationship", "wealth", "personality",
+                       "clarify_previous", "collect_birth_info", "unknown"):
+        intent = "unknown"
+
+    topic = data.get("topic")
+    if topic not in ("career", "relationship", "wealth", "personality"):
+        topic = None
+
+    birth_place = data.get("birth_place")
+    longitude = data.get("longitude")
+    if birth_place and birth_place in CITY_LONGITUDE:
+        longitude = CITY_LONGITUDE[birth_place]
+    if longitude is not None:
+        try:
+            longitude = float(longitude)
+        except (TypeError, ValueError):
+            longitude = None
+
+    gender = data.get("gender")
+    if gender not in ("male", "female"):
+        gender = None
+
+    birth_date = data.get("birth_date")
+    birth_time = data.get("birth_time")
+
+    if birth_date and not re.match(r"\d{4}-\d{2}-\d{2}$", birth_date):
+        birth_date = None
+    if birth_time and not re.match(r"\d{2}:\d{2}$", birth_time):
+        birth_time = None
+
+    confidence = 0.0
+    for value in (birth_date, birth_time, longitude, gender):
+        if value is not None:
+            confidence += 0.22
+    if birth_place:
+        confidence += 0.12
+
+    birth_info = BirthInfo(
+        birth_date=birth_date,
+        birth_time=birth_time,
+        birth_place=birth_place,
+        longitude=longitude,
+        gender=gender,
+        confidence=min(confidence, 1.0),
+    )
+    birth_info.missing_fields = birth_info.complete_missing_fields()
+
+    return ExtractionResult(
+        intent=intent,
+        topic=topic,
+        birth_info=birth_info,
+        raw_text=text,
     )
 
 
