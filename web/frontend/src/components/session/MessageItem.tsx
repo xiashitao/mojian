@@ -1,6 +1,7 @@
 import type { MessageFeedback, UiMessage } from "../../types/session";
 import { formatClock } from "../../utils/sessionFormat";
 import { KairosLogo } from "../KairosLogo";
+import { ChartCard } from "./ChartCard";
 
 export interface MessageItemProps {
   message: UiMessage;
@@ -29,8 +30,10 @@ export function MessageItem({
         error ? "is-error" : ""
       }`}
     >
+      {message.chart && <ChartCard chart={message.chart} />}
+
       <div className="message__body">
-        {pending ? (
+        {pending && !content ? (
           <KairosLogo size={24} className="message__thinking" />
         ) : (
           content

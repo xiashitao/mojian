@@ -9,6 +9,7 @@ from typing import Any
 
 from ..services import llm
 from . import memory, repository
+from .chart_card import build_chart_card
 from .extractor import merge_birth_info
 from .ids import new_analysis_id
 from .models import ChatState, ConversationState, Topic
@@ -123,6 +124,12 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
                        summary=(f"Detected {arb_summary['total']} arbitration cases. "
                                 f"Resolved: {arb_summary['resolved']}, "
                                 f"Unresolved: {arb_summary['unresolved']}."))
+
+            # Emit the chart card first, before the text analysis streams.
+            yield json.dumps(
+                {"type": "chart", "chart": build_chart_card(tool_result["chart"], merged_birth_info)},
+                ensure_ascii=False,
+            ) + "\n"
 
             clarify = decision.action == "clarify"
             prior_messages = _prior_messages(conv_id, user_message["id"])

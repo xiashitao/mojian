@@ -1,5 +1,6 @@
 import { apiGet } from "./client";
 import { getAnonId } from "../utils/anonId";
+import type { ChartData } from "../types/session";
 import type { ChatAnalysis, ChatRequest, ChatResponse } from "../types/api";
 
 const BASE_URL = "/api";
@@ -42,6 +43,7 @@ export async function sendChatMessage(
   req: ChatRequest,
   onToken: (text: string) => void,
   signal?: AbortSignal,
+  onChart?: (chart: ChartData) => void,
 ): Promise<ChatResponse> {
   if (MOCK_MODE) return _mockStream(onToken);
 
@@ -77,6 +79,7 @@ export async function sendChatMessage(
         const msg = JSON.parse(trimmed) as {
           type: string;
           text?: string;
+          chart?: ChartData;
           conversation_id?: string;
           analysis_id?: string;
           state?: ChatResponse["state"];
@@ -84,6 +87,8 @@ export async function sendChatMessage(
         };
         if (msg.type === "token" && msg.text) {
           onToken(msg.text);
+        } else if (msg.type === "chart" && msg.chart) {
+          onChart?.(msg.chart);
         } else if (msg.type === "done") {
           finalResponse = {
             conversation_id: msg.conversation_id ?? "",

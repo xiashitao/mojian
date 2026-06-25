@@ -3,5 +3,6 @@
 @import "./styles/workbench.css"; /* legacy chart / diagnosis / library / arbitration */
 @import "./styles/oracle.css"; /* app shell, header, body grid, archive sidebar + rail */
 @import "./styles/chat.css"; /* chat header, account/auth, context, messages, composer */
+@import "./styles/chart.css"; /* 命盘 chart card (八字 + 大运 + 流年) */
 @import "./styles/rail.css"; /* seal + rail cards, admin trace, mobile scrim */
 @import "./styles/landing.css"; /* landing page */

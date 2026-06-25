@@ -1,0 +1,210 @@
+/* ── 命盘 card (八字 + 大运 + 流年), exportable ── */
+.chart-card {
+  margin: 0 0 14px;
+  max-width: 560px;
+}
+
+.chart-card__capture {
+  background: var(--ink-900);
+  border: 1px solid var(--rule-line-bright);
+  border-radius: 14px;
+  padding: 16px 18px;
+}
+
+.chart-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.chart-card__title {
+  font-family: var(--font-brand);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--bone-100);
+  letter-spacing: 0.08em;
+}
+
+.chart-card__dm {
+  font-family: var(--font-cn);
+  font-size: 12px;
+  color: var(--cinnabar);
+}
+
+.chart-card__birth {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--bone-500);
+  letter-spacing: 0.04em;
+  margin-bottom: 14px;
+}
+
+/* 八字 grid */
+.bazi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.bazi-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 4px;
+  border: 1px solid var(--rule-line);
+  border-radius: 10px;
+  background: var(--ink-950);
+}
+
+.bazi-col.is-day {
+  border-color: var(--cinnabar-wash);
+  background: var(--cinnabar-soft);
+}
+
+.bazi-col__label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--bone-500);
+}
+
+.bazi-col__god {
+  font-family: var(--font-cn);
+  font-size: 11px;
+  color: var(--bone-400);
+}
+
+.bazi-col__stem,
+.bazi-col__branch {
+  font-family: var(--font-brand);
+  font-size: 30px;
+  line-height: 1.05;
+  color: var(--bone-100);
+}
+
+.bazi-col.is-day .bazi-col__stem {
+  color: var(--cinnabar);
+}
+
+.bazi-col__hidden {
+  font-family: var(--font-cn);
+  font-size: 10px;
+  color: var(--bone-400);
+  letter-spacing: 0.06em;
+}
+
+.bazi-col__nayin {
+  font-family: var(--font-cn);
+  font-size: 10px;
+  color: var(--bone-500);
+}
+
+/* 大运 */
+.luck {
+  margin-top: 14px;
+}
+
+.luck__label {
+  font-family: var(--font-cn);
+  font-size: 11px;
+  color: var(--bone-400);
+  margin-bottom: 6px;
+}
+
+.luck__track {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+
+.luck-step {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 46px;
+  padding: 6px 4px;
+  border: 1px solid var(--rule-line);
+  border-radius: 8px;
+}
+
+.luck-step.is-current {
+  border-color: var(--cinnabar);
+  background: var(--cinnabar-soft);
+}
+
+.luck-step__gz {
+  font-family: var(--font-brand);
+  font-size: 16px;
+  color: var(--bone-200);
+}
+
+.luck-step.is-current .luck-step__gz {
+  color: var(--cinnabar);
+}
+
+.luck-step__year,
+.luck-step__age {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--bone-500);
+}
+
+/* 流年 */
+.liunian {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--cinnabar-wash);
+  border-radius: 10px;
+  background: var(--cinnabar-soft);
+}
+
+.liunian__label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--bone-400);
+}
+
+.liunian__gz {
+  font-family: var(--font-brand);
+  font-size: 20px;
+  color: var(--cinnabar);
+}
+
+.liunian__meta {
+  font-family: var(--font-cn);
+  font-size: 11px;
+  color: var(--bone-400);
+}
+
+.chart-card__export {
+  margin-top: 8px;
+  padding: 5px 14px;
+  background: transparent;
+  border: 1px solid var(--rule-line-bright);
+  border-radius: 999px;
+  color: var(--bone-300);
+  font-family: var(--font-cn);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.chart-card__export:hover:not(:disabled) {
+  color: var(--cinnabar);
+  border-color: var(--cinnabar);
+}
+
+.chart-card__export:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}

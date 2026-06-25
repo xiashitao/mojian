@@ -128,6 +128,11 @@ export function useChatSession() {
             );
           },
           controller.signal,
+          (chart) => {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === pendingId ? { ...m, chart } : m)),
+            );
+          },
         );
         setConversationId(res.conversation_id);
         navigate(`/session/${res.conversation_id}`, { replace: true });
