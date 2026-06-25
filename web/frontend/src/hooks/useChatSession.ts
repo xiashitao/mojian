@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { sendChatMessage } from "../api/chatApi";
-import { forgetMemory } from "../api/memoryApi";
 import { getConversation } from "../api/conversationApi";
 import type { ChatState, Topic } from "../types/api";
 import type {
@@ -115,15 +114,6 @@ export function useChatSession() {
   }, [navigate]);
 
   const goHome = useCallback(() => navigate("/"), [navigate]);
-
-  const forget = useCallback(async () => {
-    try {
-      await forgetMemory();
-    } catch {
-      // best-effort; nothing to surface
-    }
-    setBirthInfo(null);
-  }, []);
 
   const send = useCallback(
     async (textInput?: string) => {
@@ -267,6 +257,5 @@ export function useChatSession() {
     selectConversation,
     setMessageFeedback,
     goHome,
-    forget,
   } as const;
 }

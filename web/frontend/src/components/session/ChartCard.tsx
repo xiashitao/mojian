@@ -72,7 +72,7 @@ export function ChartCard({ chart }: { chart: ChartData }) {
                 {p.branch}
               </span>
               <span className="bazi-col__hidden">
-                {p.hidden.map((h) => (
+                {(p.hidden ?? []).map((h) => (
                   <span key={h.char} className="hidden-stem">
                     <b className={elementClass(h.char)}>{h.char}</b>
                     {h.role && <i className="hidden-stem__role">{h.role[0]}</i>}

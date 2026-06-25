@@ -29,8 +29,10 @@ export default function SessionPage() {
     selectConversation,
     setMessageFeedback,
     goHome,
-    forget,
   } = useChatSession();
+
+  const latestChart =
+    [...messages].reverse().find((m) => m.chart)?.chart ?? null;
 
   return (
     <div className="oracle">
@@ -66,7 +68,7 @@ export default function SessionPage() {
           <ChatContextBar
             topic={currentTopic ?? currentConv?.topic}
             birthInfo={birthInfo}
-            onForget={() => void forget()}
+            chart={latestChart}
           />
           <MessageList
             messages={messages}

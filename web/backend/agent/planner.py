@@ -135,7 +135,11 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
                 )
             )
             if state.chart_shown_for != birth_key:
-                chart_card_payload = build_chart_card(tool_result["chart"], merged_birth_info)
+                chart_card_payload = build_chart_card(
+                    tool_result["chart"],
+                    merged_birth_info,
+                    (tool_result.get("diagnosis") or {}).get("interactions"),
+                )
                 state.chart_shown_for = birth_key
                 yield json.dumps(
                     {"type": "chart", "chart": chart_card_payload},

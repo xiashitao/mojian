@@ -10,9 +10,55 @@ from typing import Any
 from .models import BirthInfo
 
 _PILLAR_KEYS = ("year", "month", "day", "hour")
+_POS_CN = {"year": "年", "month": "月", "day": "日", "hour": "时"}
+# 相生顺序 — 木生火生土生金生水生木，so a left-to-right read shows 气势流通.
+_ELEMENT_ORDER = ("木", "火", "土", "金", "水")
 
 
-def build_chart_card(chart: dict[str, Any], birth_info: BirthInfo) -> dict[str, Any]:
+def _elements(chart: dict[str, Any]) -> list[dict[str, Any]]:
+    """Five-element strength distribution, ordered along the 相生 cycle."""
+    dist = chart.get("element_distribution") or {}
+    return [
+        {
+            "el": el,
+            "count": (dist.get(el) or {}).get("count", 0),
+            "pct": (dist.get(el) or {}).get("percentage", 0),
+        }
+        for el in _ELEMENT_ORDER
+    ]
+
+# diagnosis interaction categories folded into the four 合/冲/刑/害 families.
+_INTERACTION_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("合", ("gan_he", "san_he", "ban_he", "san_hui", "ban_hui")),
+    ("冲", ("chong",)),
+    ("刑", ("xing",)),
+    ("害", ("hai",)),
+)
+
+
+def _interactions(raw: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Flatten the diagnosis 刑冲合化 result into a compact, display-ready list."""
+    if not raw:
+        return []
+    out: list[dict[str, Any]] = []
+    for group, keys in _INTERACTION_GROUPS:
+        for key in keys:
+            for i in raw.get(key, []):
+                out.append({
+                    "group": group,
+                    "kind": i.get("kind"),
+                    "chars": i.get("elements", []),
+                    "positions": [_POS_CN.get(p, p) for p in i.get("participants", [])],
+                    "note": i.get("note") or "",
+                })
+    return out
+
+
+def build_chart_card(
+    chart: dict[str, Any],
+    birth_info: BirthInfo,
+    interactions: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     four_pillars = chart.get("four_pillars", {})
     pillars = [
         _pillar(four_pillars[key])
@@ -53,6 +99,8 @@ def build_chart_card(chart: dict[str, Any], birth_info: BirthInfo) -> dict[str, 
         "day_master": chart.get("day_master"),
         "day_master_element": chart.get("day_master_element"),
         "pillars": pillars,
+        "elements": _elements(chart),
+        "interactions": _interactions(interactions),
         "luck": {"direction": luck.get("direction"), "pillars": luck_pillars},
         "current": current_card,
         "birth": {

@@ -262,20 +262,20 @@
   letter-spacing: 0.04em;
 }
 
-.chat-context__forget {
+.chat-context__chart {
   margin-left: auto;
-  padding: 2px 8px;
+  padding: 2px 12px;
   background: transparent;
-  border: 1px solid var(--rule-line);
+  border: 1px solid var(--rule-line-bright);
   border-radius: 999px;
-  color: var(--bone-500);
+  color: var(--bone-300);
   font-family: var(--font-cn);
   font-size: 11px;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
 }
 
-.chat-context__forget:hover {
+.chat-context__chart:hover {
   color: var(--cinnabar);
   border-color: var(--cinnabar);
 }

@@ -84,12 +84,14 @@
   color: var(--bone-100);
 }
 
-/* 五行 colors for 天干/地支 (override the base text color) */
-.el-wood { color: var(--el-wood); }
-.el-fire { color: var(--el-fire); }
-.el-earth { color: var(--el-earth); }
-.el-metal { color: var(--el-metal); }
-.el-water { color: var(--el-water); }
+/* 五行 colors for 天干/地支/藏干. Scoped under the card / modal so they win
+   over the structural bone-color rules (.detail-pillar__gz, .hidden-stem b)
+   regardless of source order. */
+.chart-card .el-wood,  .detail-modal .el-wood  { color: var(--el-wood); }
+.chart-card .el-fire,  .detail-modal .el-fire  { color: var(--el-fire); }
+.chart-card .el-earth, .detail-modal .el-earth { color: var(--el-earth); }
+.chart-card .el-metal, .detail-modal .el-metal { color: var(--el-metal); }
+.chart-card .el-water, .detail-modal .el-water { color: var(--el-water); }
 
 .hidden-stem__role {
   font-style: normal;
@@ -360,6 +362,125 @@
   font-family: var(--font-cn);
   font-size: 10px;
   color: var(--bone-500);
+}
+
+/* 五行气势 · 相生流通 */
+.el-flow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.el-flow__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.el-flow__track {
+  display: flex;
+  align-items: flex-end;
+  height: 70px;
+}
+
+.el-flow__bar {
+  width: 22px;
+  min-height: 3px;
+  background: currentColor;
+  border-radius: 2px 2px 0 0;
+}
+
+.el-flow__name {
+  font-family: var(--font-brand);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.el-flow__pct {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--bone-500);
+}
+
+.el-flow__arrow {
+  align-self: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--bone-500);
+}
+
+/* 刑冲合害 */
+.interactions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.interactions__empty {
+  font-family: var(--font-cn);
+  font-size: 12px;
+  color: var(--bone-500);
+}
+
+.interaction {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--rule-line);
+  border-left-width: 2px;
+  border-radius: 8px;
+  background: var(--ink-950);
+}
+
+.interaction.is-he { border-left-color: var(--jade); }
+.interaction.is-chong { border-left-color: var(--cinnabar); }
+.interaction.is-xing { border-left-color: var(--vermilion); }
+.interaction.is-hai { border-left-color: var(--bronze); }
+
+.interaction__group {
+  flex-shrink: 0;
+  width: 1.4em;
+  text-align: center;
+  font-family: var(--font-brand);
+  font-size: 14px;
+}
+
+.interaction.is-he .interaction__group { color: var(--jade); }
+.interaction.is-chong .interaction__group { color: var(--cinnabar); }
+.interaction.is-xing .interaction__group { color: var(--vermilion); }
+.interaction.is-hai .interaction__group { color: var(--bronze); }
+
+.interaction__chars {
+  font-family: var(--font-brand);
+  font-size: 18px;
+  letter-spacing: 0.04em;
+}
+
+.interaction__kind {
+  font-family: var(--font-cn);
+  font-size: 12px;
+  color: var(--bone-300);
+}
+
+.interaction__pos {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--bone-500);
+}
+
+.interaction__note {
+  margin-left: auto;
+  font-family: var(--font-cn);
+  font-size: 11px;
+  color: var(--bone-500);
+  text-align: right;
 }
 
 /* 大运 + 流年 */

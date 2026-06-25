@@ -6,6 +6,8 @@ import {
   yearRange,
 } from "../../utils/ganzhi";
 import { Ganzhi } from "./Ganzhi";
+import { ElementFlow } from "./ElementFlow";
+import { Interactions } from "./Interactions";
 
 interface Props {
   chart: ChartData;
@@ -51,7 +53,7 @@ export function ChartDetailModal({ chart, onClose }: Props) {
                   </span>
                   <span className="detail-pillar__god">{p.branch_ten_god ?? "—"}</span>
                   <span className="detail-pillar__hidden">
-                    {p.hidden.map((h) => (
+                    {(p.hidden ?? []).map((h) => (
                       <span key={h.char} className="hidden-stem">
                         <b className={elementClass(h.char)}>{h.char}</b>
                         {h.role && <i className="hidden-stem__role">{h.role[0]}</i>}
@@ -63,6 +65,18 @@ export function ChartDetailModal({ chart, onClose }: Props) {
                 </div>
               ))}
             </div>
+          </section>
+
+          {chart.elements && chart.elements.length > 0 && (
+            <section className="detail-section">
+              <h4 className="detail-section__h">五行气势 · 相生流通</h4>
+              <ElementFlow elements={chart.elements} />
+            </section>
+          )}
+
+          <section className="detail-section">
+            <h4 className="detail-section__h">刑冲合害</h4>
+            <Interactions interactions={chart.interactions ?? []} />
           </section>
 
           <section className="detail-section">

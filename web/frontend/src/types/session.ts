@@ -28,6 +28,22 @@ export type ChartLuckPillar = {
   branch_ten_god?: string;
 };
 
+export type InteractionGroup = "合" | "冲" | "刑" | "害";
+
+export type ChartInteraction = {
+  group: InteractionGroup;
+  kind: string;
+  chars: string[];
+  positions: string[];
+  note: string;
+};
+
+export type ElementWeight = {
+  el: string;
+  count: number;
+  pct: number;
+};
+
 export type ChartCurrent = {
   year: number;
   nominal_age: number;
@@ -42,6 +58,8 @@ export type ChartData = {
   day_master: string;
   day_master_element: string;
   pillars: ChartPillar[];
+  elements?: ElementWeight[];
+  interactions?: ChartInteraction[];
   luck: { direction: string | null; pillars: ChartLuckPillar[] };
   current: ChartCurrent | null;
   birth: {

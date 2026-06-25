@@ -26,6 +26,10 @@ from ..services.enrich import enrich_chart
 _TOOL_CACHE: "OrderedDict[tuple, dict[str, Any]]" = OrderedDict()
 _TOOL_CACHE_MAX = 256
 
+# 12 大运 × 10 years covers the full traditional life span; even with an early
+# 起运 age this reaches past 120, so the 专业细盘 流年 table never runs short.
+_LUCK_PILLAR_COUNT = 12
+
 
 def _cache_key(birth_info: BirthInfo, reference_year: int | None) -> tuple:
     return (
@@ -81,6 +85,7 @@ def _compute_bazibase_tools(
         gender=str(birth_info.gender),
         tz_offset_hours=birth_info.tz_offset_hours,
         apply_solar_time_correction=birth_info.apply_solar_time_correction,
+        luck_pillar_count=_LUCK_PILLAR_COUNT,
         reference_year=reference_year,
     )
     diagnosis = diagnose(chart)
