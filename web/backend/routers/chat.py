@@ -24,6 +24,7 @@ def chat(
             req.conversation_id,
             user_id=user_id,
             memory_key=memory_key,
+            tone=req.tone,
         ),
         media_type="application/x-ndjson",
     )

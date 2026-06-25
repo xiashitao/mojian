@@ -68,6 +68,21 @@ def build_out_of_scope_reply() -> tuple[str, ChatState]:
     )
 
 
+# Answer-tone presets. These change ONLY the wording style — never the
+# structured judgment, the boundaries, or the constraints below. Unknown /
+# None falls back to the restrained default (per PRODUCT.md brand).
+DEFAULT_TONE = "advisor"
+_TONE_INSTRUCTION = {
+    "advisor": "语气沉稳克制，像一位审慎的顾问，给有依据、有边界的参考。",
+    "friend": "语气温和亲切，像一个耐心的朋友陪你聊，可以多一点共情，但不夸张、不打包票。",
+    "direct": "语气直接利落，先给结论、少铺垫、不绕弯，但仍然保留必要的边界和不确定性。",
+}
+
+
+def _tone_instruction(tone: str | None) -> str:
+    return _TONE_INSTRUCTION.get(tone or DEFAULT_TONE, _TONE_INSTRUCTION[DEFAULT_TONE])
+
+
 def stream_consultation_reply(
     topic: Topic | None,
     tool_result: dict[str, Any],
@@ -77,6 +92,7 @@ def stream_consultation_reply(
     user_message: str = "",
     history: list[dict[str, Any]] | None = None,
     memory_notes: list[dict[str, Any]] | None = None,
+    tone: str | None = None,
 ) -> Iterator[tuple[str, ChatState | None, dict[str, Any] | None]]:
     """Stream the consultation reply chunk by chunk.
 
@@ -112,7 +128,8 @@ def stream_consultation_reply(
                                          clarify_previous=clarify_previous,
                                          user_message=user_message,
                                          history=history,
-                                         memory_notes=memory_notes)
+                                         memory_notes=memory_notes,
+                                         tone=tone)
     collected = []
     try:
         for chunk in stream(prompt["system_prompt"], prompt["user_prompt"],
@@ -405,6 +422,7 @@ def _build_stream_reply_prompt(
     user_message: str = "",
     history: list[dict[str, Any]] | None = None,
     memory_notes: list[dict[str, Any]] | None = None,
+    tone: str | None = None,
 ) -> dict[str, str]:
     """Streaming (non-JSON) prompt that answers the user's current question."""
     system_prompt = (
@@ -417,7 +435,10 @@ def _build_stream_reply_prompt(
         "但同样用日常语言，不要报出干支或十神这类术语。"
         "不要提及具体流派名、古籍或后台规则，也不要堆砌命理术语。"
         "用日常语言展开，依次涵盖：直接结论、适配的条件或方向、需要注意的风险、一条可执行的建议。"
-        "篇幅约300–500字，分2–4个自然段，语气沉稳克制。不要在结尾附上追问建议。"
+        "篇幅约300–500字，分2–4个自然段。"
+        # Tone affects wording only; all constraints above still hold.
+        f"{_tone_instruction(tone)}"
+        "不要在结尾附上追问建议。"
     )
     analysis_block = _build_analysis_block(topic, context, clarify_previous=clarify_previous)
 

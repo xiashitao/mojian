@@ -1,15 +1,21 @@
-import type { KeyboardEvent } from "react";
+import { useState, type KeyboardEvent } from "react";
+import { ComposerHints } from "./ComposerHints";
+import { TonePopover, toneLabel, type ToneId } from "./TonePopover";
 
 export interface ComposerProps {
   value: string;
   loading: boolean;
+  tone: ToneId;
+  onToneChange: (tone: ToneId) => void;
   onChange: (value: string) => void;
   onSend: () => void;
   onStop: () => void;
 }
 
-/** Bottom composer: textarea, typing indicator and round send / stop button. */
-export function Composer({ value, loading, onChange, onSend, onStop }: ComposerProps) {
+/** Bottom composer: textarea, typing indicator, tone selector and send / stop button. */
+export function Composer({ value, loading, tone, onToneChange, onChange, onSend, onStop }: ComposerProps) {
+  const [toneOpen, setToneOpen] = useState(false);
+
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -17,10 +23,13 @@ export function Composer({ value, loading, onChange, onSend, onStop }: ComposerP
     }
   };
 
+  const toggleTone = () => setToneOpen((open) => !open);
+
   return (
     <div className="composer">
       <div className="composer__wrap">
-        {loading && (
+        {/* Above the box: typing indicator while analysing, rotating hints (PC) when idle. */}
+        {loading ? (
           <div className="composer__typing">
             <span className="composer__typing-dots">
               <span />
@@ -29,8 +38,24 @@ export function Composer({ value, loading, onChange, onSend, onStop }: ComposerP
             </span>
             分析中
           </div>
+        ) : (
+          <ComposerHints />
         )}
+
         <div className="composer__box">
+          {/* Mobile-only: a plus that rotates 45° and opens the tone popover. */}
+          <button
+            type="button"
+            className={"composer__plus" + (toneOpen ? " is-open" : "")}
+            onClick={toggleTone}
+            aria-label="更多选项"
+            aria-expanded={toneOpen}
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+              <path d="M9 3.5v11M3.5 9h11" />
+            </svg>
+          </button>
+
           <textarea
             className="composer__input"
             value={value}
@@ -40,8 +65,21 @@ export function Composer({ value, loading, onChange, onSend, onStop }: ComposerP
             autoComplete="off"
             rows={1}
           />
+
           <div className="composer__toolbar">
-            <span className="composer__hint">Enter 发送 · Shift+Enter 换行</span>
+            {/* PC-only: labelled tone button. */}
+            <button
+              type="button"
+              className={"composer__tool" + (toneOpen ? " is-open" : "")}
+              onClick={toggleTone}
+              aria-expanded={toneOpen}
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2.5 4.5h11v6H6l-2.5 2v-2h-1z" />
+              </svg>
+              <span>{toneLabel(tone)}</span>
+            </button>
+
             {loading ? (
               <button
                 type="button"
@@ -70,6 +108,14 @@ export function Composer({ value, loading, onChange, onSend, onStop }: ComposerP
             )}
           </div>
         </div>
+
+        {toneOpen && (
+          <TonePopover
+            selected={tone}
+            onSelect={onToneChange}
+            onClose={() => setToneOpen(false)}
+          />
+        )}
       </div>
     </div>
   );

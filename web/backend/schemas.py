@@ -34,3 +34,6 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1)
     conversation_id: Optional[str] = None
     anon_id: Optional[str] = None
+    # Answer tone preset (advisor | friend | direct). Only the wording style;
+    # unknown / None falls back to the restrained default in the responder.
+    tone: Optional[str] = None

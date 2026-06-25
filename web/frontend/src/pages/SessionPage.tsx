@@ -15,6 +15,8 @@ export default function SessionPage() {
     loadingConv,
     input,
     setInput,
+    tone,
+    setTone,
     birthInfo,
     currentTopic,
     currentConv,
@@ -80,6 +82,8 @@ export default function SessionPage() {
           <Composer
             value={input}
             loading={loading}
+            tone={tone}
+            onToneChange={setTone}
             onChange={setInput}
             onSend={() => void send()}
             onStop={stop}

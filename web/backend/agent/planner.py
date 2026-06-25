@@ -26,7 +26,7 @@ from .tracing import TraceWriter
 from bazibase import solar_ganzhi_year
 
 
-def stream_chat(message: str, conversation_id: str | None = None, *, user_id: str | None = None, memory_key: str | None = None) -> Iterator[str]:
+def stream_chat(message: str, conversation_id: str | None = None, *, user_id: str | None = None, memory_key: str | None = None, tone: str | None = None) -> Iterator[str]:
     """Stream one user message response as newline-delimited JSON chunks.
 
     Yields:
@@ -157,6 +157,7 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
                 user_message=message,
                 history=prior_messages,
                 memory_notes=past_notes,
+                tone=tone,
             ):
                 if chunk:
                     reply_parts.append(chunk)

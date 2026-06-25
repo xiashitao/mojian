@@ -721,6 +721,206 @@
   letter-spacing: 0.04em;
 }
 
+/* Rotating hints above the composer box (idle state). One line tall;
+   the track stacks all hints vertically and slides up one per rotation. */
+.composer__hints {
+  height: 18px;
+  overflow: hidden;
+  margin: 0 0 8px 8px;
+}
+
+.composer__hints-track {
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.composer__hints .composer__hint {
+  flex-shrink: 0;
+  height: 18px;
+  display: flex;
+  align-items: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer__hints-track {
+    transition: none;
+  }
+}
+
+/* ── Composer: tone selector (PC tone button + mobile plus) ── */
+
+.composer__wrap {
+  position: relative;
+}
+
+.composer__box {
+  display: flex;
+  flex-direction: column;
+}
+
+/* PC-only labelled tone button, sits at the left of the bottom toolbar. */
+.composer__tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  background: transparent;
+  border: 1px solid var(--rule-line-bright);
+  border-radius: 999px;
+  color: var(--bone-300);
+  font-family: var(--font-cn);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.composer__tool:hover,
+.composer__tool.is-open {
+  border-color: var(--cinnabar);
+  color: var(--cinnabar);
+}
+
+/* Mobile-only plus to the left of the input; rotates 45° when open. */
+.composer__plus {
+  display: none;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--rule-line-bright);
+  background: transparent;
+  color: var(--bone-300);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.composer__plus svg {
+  transition: transform 0.2s ease;
+}
+
+.composer__plus:hover,
+.composer__plus.is-open {
+  border-color: var(--cinnabar);
+  color: var(--cinnabar);
+}
+
+.composer__plus.is-open svg {
+  transform: rotate(45deg);
+}
+
+/* Answer-tone popover, opens upward above the composer box. */
+.tone-popover__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.tone-popover {
+  position: absolute;
+  left: 6px;
+  bottom: calc(100% + 8px);
+  z-index: 41;
+  width: 248px;
+  max-width: calc(100% - 12px);
+  padding: 8px;
+  /* 无影 Rule: elevation via ink step + 1px rule-line, never box-shadow. */
+  background: var(--ink-850);
+  border: 1px solid var(--rule-line-bright);
+  border-radius: 8px;
+}
+
+.tone-popover__title {
+  padding: 2px 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bone-500);
+}
+
+.tone-popover__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tone-popover__option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 2px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.tone-popover__option:hover {
+  background: var(--ink-800);
+}
+
+.tone-popover__option.is-selected {
+  background: var(--cinnabar-soft);
+}
+
+.tone-popover__label {
+  font-family: var(--font-cn);
+  font-size: 13px;
+  color: var(--bone-200);
+}
+
+.tone-popover__option.is-selected .tone-popover__label {
+  color: var(--cinnabar);
+}
+
+.tone-popover__desc {
+  font-family: var(--font-cn);
+  font-size: 11px;
+  color: var(--bone-500);
+}
+
+/* Mobile: hide PC hints + tone button, show the plus, lay the box out in a row. */
+@media (max-width: 640px) {
+  .composer__hints {
+    display: none;
+  }
+
+  .composer__tool {
+    display: none;
+  }
+
+  .composer__plus {
+    display: flex;
+  }
+
+  .composer__box {
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .composer__input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 4px 8px 6px;
+  }
+
+  .composer__toolbar {
+    flex-shrink: 0;
+    padding: 0;
+  }
+}
+
 .composer__send {
   flex-shrink: 0;
   width: 34px;

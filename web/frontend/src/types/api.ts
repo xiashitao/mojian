@@ -95,6 +95,7 @@ export interface ChatRequest {
   conversation_id?: string;
   message: string;
   anon_id?: string;
+  tone?: string;
 }
 
 export interface ChatMessage {

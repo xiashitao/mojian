@@ -11,6 +11,7 @@ import type {
 } from "../types/session";
 import { useArchiveCollapsed } from "./useArchiveCollapsed";
 import { useConversations } from "./useConversations";
+import { DEFAULT_TONE, type ToneId } from "../components/session/TonePopover";
 
 /** Pull persisted chart + follow-ups out of a stored message's metadata. */
 function parseMeta(metadataJson?: string): {
@@ -48,6 +49,7 @@ export function useChatSession() {
   const [latestState, setLatestState] = useState<ChatState | null>(null);
   const [birthInfo, setBirthInfo] = useState<BirthInfo | null>(null);
   const [input, setInput] = useState("");
+  const [tone, setTone] = useState<ToneId>(DEFAULT_TONE);
   const [loading, setLoading] = useState(false);
   const [loadingConv, setLoadingConv] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"archive" | null>(null);
@@ -136,7 +138,7 @@ export function useChatSession() {
 
       try {
         const res = await sendChatMessage(
-          { conversation_id: conversationId ?? undefined, message: text },
+          { conversation_id: conversationId ?? undefined, message: text, tone },
           (chunk) => {
             setMessages((prev) =>
               prev.map((m) =>
@@ -178,7 +180,7 @@ export function useChatSession() {
         setLoading(false);
       }
     },
-    [conversationId, input, loading, navigate, refreshConversations],
+    [conversationId, input, loading, navigate, refreshConversations, tone],
   );
 
   const stop = useCallback(() => {
@@ -243,6 +245,8 @@ export function useChatSession() {
     loadingConv,
     input,
     setInput,
+    tone,
+    setTone,
     birthInfo,
     currentTopic,
     currentConv,
