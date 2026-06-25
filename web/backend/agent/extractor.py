@@ -41,6 +41,22 @@ CITY_LONGITUDE: dict[str, float] = {
     "台北": 121.6,
 }
 
+# 地支时辰 → 该时辰中点（与 LLM 提取 prompt 中的映射保持一致）。
+HOUR_BRANCH_TIME: dict[str, str] = {
+    "子": "23:30",
+    "丑": "01:30",
+    "寅": "03:30",
+    "卯": "05:30",
+    "辰": "07:30",
+    "巳": "09:30",
+    "午": "11:30",
+    "未": "13:30",
+    "申": "15:30",
+    "酉": "17:30",
+    "戌": "19:30",
+    "亥": "21:30",
+}
+
 _TOPIC_KEYWORDS: list[tuple[Topic, tuple[str, ...]]] = [
     ("career", ("事业", "职业", "工作", "创业", "行业", "合伙", "上班", "跳槽")),
     ("relationship", ("感情", "婚恋", "婚姻", "恋爱", "对象", "伴侣", "另一半")),
@@ -272,6 +288,10 @@ def _extract_time(text: str) -> str | None:
             h = 12
         if 0 <= h <= 23 and 0 <= m <= 59:
             return f"{h:02d}:{m:02d}"
+
+    branch_match = re.search(r"([子丑寅卯辰巳午未申酉戌亥])时", text)
+    if branch_match:
+        return HOUR_BRANCH_TIME[branch_match.group(1)]
 
     rough = (
         ("凌晨", "03:00"),

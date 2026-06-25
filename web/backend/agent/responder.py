@@ -46,6 +46,8 @@ def build_consultation_reply(
     *,
     source_basis: dict[str, Any],
     clarify_previous: bool = False,
+    user_message: str = "",
+    history: list[dict[str, Any]] | None = None,
 ) -> tuple[str, ChatState, dict[str, Any]]:
     actual_topic = topic or "personality"
     chart = tool_result["chart"]
@@ -59,6 +61,8 @@ def build_consultation_reply(
         context,
         clarify_previous=clarify_previous,
         followups=followups,
+        user_message=user_message,
+        history=history,
     )
     llm_result = _call_reply_llm(prompt)
     if llm_result is not None:
@@ -102,6 +106,8 @@ def stream_consultation_reply(
     *,
     source_basis: dict[str, Any],
     clarify_previous: bool = False,
+    user_message: str = "",
+    history: list[dict[str, Any]] | None = None,
 ) -> Iterator[tuple[str, ChatState | None, dict[str, Any] | None]]:
     """Stream the consultation reply chunk by chunk.
 
@@ -138,7 +144,9 @@ def stream_consultation_reply(
 
     prompt = _build_stream_reply_prompt(actual_topic, context,
                                          clarify_previous=clarify_previous,
-                                         followups=followups)
+                                         followups=followups,
+                                         user_message=user_message,
+                                         history=history)
     collected = []
     try:
         for chunk in stream_deepseek(prompt["system_prompt"], prompt["user_prompt"],
@@ -300,22 +308,25 @@ def _topic_cn(topic: Topic | None) -> str:
     }.get(topic or "career", "这个问题")
 
 
-def _build_stream_reply_prompt(
-    topic: Topic,
-    context: dict[str, Any],
-    *,
-    clarify_previous: bool,
-    followups: list[str],
-) -> dict[str, str]:
-    """Build a plain-text streaming prompt (no JSON response_format)."""
-    system_prompt = (
-        "你是一位谨慎、专业、简洁的命理咨询助手。"
-        "基于以下结构化分析结果，用自然流畅的中文直接回答用户的问题。"
-        "不要编造超出分析结论的内容。不要提及具体流派名、古籍或后台规则。"
-        "回答控制在200字以内，语气沉稳克制。"
-        f"最后推荐1-2个追问方向，格式：你可以继续问：{' / '.join(followups[:2])}"
-    )
-    analysis_block = {
+def _render_history(history: list[dict[str, Any]] | None, *, max_turns: int = 4) -> str:
+    """Compact transcript of the most recent turns for follow-up context."""
+    if not history:
+        return ""
+    role_cn = {"user": "用户", "assistant": "助手"}
+    lines: list[str] = []
+    for msg in history[-max_turns:]:
+        content = str(msg.get("content", "")).strip()
+        if not content:
+            continue
+        if len(content) > 180:
+            content = content[:180] + "…"
+        role = role_cn.get(str(msg.get("role")), str(msg.get("role")))
+        lines.append(f"{role}：{content}")
+    return "\n".join(lines)
+
+
+def _build_analysis_block(topic: Topic, context: dict[str, Any], *, clarify_previous: bool) -> dict[str, Any]:
+    return {
         "topic": topic,
         "clarify_previous": clarify_previous,
         "day_master": context.get("day_master"),
@@ -327,8 +338,7 @@ def _build_stream_reply_prompt(
         "has_unresolved_cases": context.get("has_unresolved_cases"),
         "arbitration_decisions": context.get("arbitration_decisions", {}),
     }
-    user_prompt = json.dumps(analysis_block, ensure_ascii=False, indent=2)
-    return {"system_prompt": system_prompt, "user_prompt": user_prompt}
+
 
 def _build_stream_reply_prompt(
     topic: Topic,
@@ -336,30 +346,34 @@ def _build_stream_reply_prompt(
     *,
     clarify_previous: bool,
     followups: list[str],
+    user_message: str = "",
+    history: list[dict[str, Any]] | None = None,
 ) -> dict[str, str]:
-    """Build a streaming (non-JSON) prompt for consultation reply."""
+    """Streaming (non-JSON) prompt that answers the user's current question."""
     system_prompt = (
         "你是一位谨慎、专业、简洁的命理咨询助手。"
-        "基于以下结构化分析结果，用自然流畅的中文直接回答用户的问题。"
-        "不要编造超出分析结论的内容。不要提及具体流派名、古籍或后台规则。"
+        "请直接回答「用户当前的问题」，回答必须基于下方结构化分析结果，"
+        "不要编造超出分析结论的内容，也不要重复之前已经说过的话。"
+        "不要提及具体流派名、古籍或后台规则。"
         "回答控制在200字以内，语气沉稳克制。"
-        "最后推荐1-2个追问方向，格式：\n你可以继续问：问题1 / 问题2"
+        "最后另起一行推荐1-2个追问方向，格式：\n你可以继续问：问题1 / 问题2"
     )
-    analysis_block = {
-        "topic": topic,
-        "clarify_previous": clarify_previous,
-        "day_master": context.get("day_master"),
-        "day_master_element": context.get("day_master_element"),
-        "strength_verdict": context.get("strength_verdict"),
-        "ge_ju": context.get("ge_ju"),
-        "yong_shen_ten_god": context.get("yong_shen_ten_god"),
-        "cheng_bai": context.get("cheng_bai"),
-        "has_unresolved_cases": context.get("has_unresolved_cases"),
-        "arbitration_decisions": context.get("arbitration_decisions", {}),
-        "followup_candidates": followups,
-    }
-    user_prompt = json.dumps(analysis_block, ensure_ascii=False, indent=2)
-    return {"system_prompt": system_prompt, "user_prompt": user_prompt}
+    analysis_block = _build_analysis_block(topic, context, clarify_previous=clarify_previous)
+    analysis_block["followup_candidates"] = followups
+
+    parts = [
+        "## 结构化分析结果",
+        json.dumps(analysis_block, ensure_ascii=False, indent=2),
+    ]
+    transcript = _render_history(history)
+    if transcript:
+        parts.append("## 最近的对话")
+        parts.append(transcript)
+    parts.append("## 用户当前的问题")
+    parts.append(user_message.strip() or f"请就「{_topic_cn(topic)}」方向给我分析。")
+
+    return {"system_prompt": system_prompt, "user_prompt": "\n\n".join(parts)}
+
 
 def _build_reply_prompt(
     topic: Topic,
@@ -367,31 +381,27 @@ def _build_reply_prompt(
     *,
     clarify_previous: bool,
     followups: list[str],
+    user_message: str = "",
+    history: list[dict[str, Any]] | None = None,
 ) -> dict[str, str]:
     system_prompt = (
         "你是一位谨慎、专业、简洁的命理咨询助手。"
-        "你必须基于结构化分析结果回答，不要编造超出证据的结论。"
+        "请直接回答 user_question，回答必须基于结构化分析结果，"
+        "不要编造超出证据的结论，也不要重复 recent_dialog 里已经说过的话。"
         "用户回复中不要出现具体流派名、古籍书名或后台规则来源。"
         "输出必须是严格 JSON，不要输出任何额外文本。"
     )
     user_payload = {
         "topic": topic,
         "clarify_previous": clarify_previous,
-        "analysis": {
-            "day_master": context.get("day_master"),
-            "day_master_element": context.get("day_master_element"),
-            "strength_verdict": context.get("strength_verdict"),
-            "ge_ju": context.get("ge_ju"),
-            "yong_shen_ten_god": context.get("yong_shen_ten_god"),
-            "cheng_bai": context.get("cheng_bai"),
-            "has_unresolved_cases": context.get("has_unresolved_cases"),
-            "arbitration_decisions": context.get("arbitration_decisions", {}),
-        },
+        "user_question": user_message.strip(),
+        "recent_dialog": _render_history(history),
+        "analysis": _build_analysis_block(topic, context, clarify_previous=clarify_previous),
         "response_policy": {
             "tone": "consultation",
             "avoid_raw_rule_dumps": True,
             "mention_technical_terms_sparingly": True,
-            "focus": "user-facing advice with light professional flavor",
+            "focus": "answer user_question with user-facing advice",
         },
         "required_fields": ["reply", "suggested_followups"],
         "followup_candidates": followups,

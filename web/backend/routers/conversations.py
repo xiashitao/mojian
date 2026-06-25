@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..agent.repository import (
+    get_conversation,
     get_conversation_messages,
     get_conversation_state,
     list_conversations,
@@ -19,8 +20,19 @@ def conversations_list(user: CurrentUser | None = Depends(get_optional_user)):
 
 
 @router.get("/conversations/{conversation_id}")
-def conversation_detail(conversation_id: str):
+def conversation_detail(
+    conversation_id: str,
+    user: CurrentUser | None = Depends(get_optional_user),
+):
     """Return a single conversation with its messages and parsed state."""
+    conversation = get_conversation(conversation_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="会话未找到")
+
+    owner_id = conversation.get("user_id")
+    if owner_id and (not user or user.id != owner_id):
+        raise HTTPException(status_code=404, detail="会话未找到")
+
     messages = get_conversation_messages(conversation_id)
     if not messages:
         raise HTTPException(status_code=404, detail="会话未找到")

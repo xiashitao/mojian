@@ -4,7 +4,7 @@ import type { ChatAnalysis, ChatRequest, ChatResponse } from "../types/api";
 const BASE_URL = "/api";
 
 // 切换为 true 可完全不启动后端，在浏览器内验证流式 UI
-const MOCK_MODE = true;
+const MOCK_MODE = import.meta.env.VITE_MOCK_CHAT === "true";
 
 const _MOCK_REPLY =
   "根据你的命盘结构来看，日主偏强，用神倾向食伤泄秀。" +
@@ -107,4 +107,3 @@ export async function sendChatMessage(
 export function getChatAnalysis(analysisId: string): Promise<ChatAnalysis> {
   return apiGet<ChatAnalysis>(`/admin/analyses/${analysisId}`);
 }
-

@@ -48,6 +48,18 @@ def ensure_conversation(conversation_id: str | None, *, user_id: str | None = No
         conn.close()
 
 
+def get_conversation(conversation_id: str) -> dict | None:
+    """Return one conversation row by ID."""
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT * FROM conversations WHERE id = ?", (conversation_id,)
+        ).fetchone()
+        return _row_to_dict(row, parse_json=True) if row else None
+    finally:
+        conn.close()
+
+
 def add_message(
     conversation_id: str,
     role: str,
@@ -341,4 +353,3 @@ def _row_to_dict(row, *, parse_json: bool = False) -> dict:
             if key in data:
                 data[key] = _load(data[key], {})
     return data
-

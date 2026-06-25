@@ -48,7 +48,7 @@ def handle_chat(message: str, conversation_id: str | None = None) -> dict[str, A
         )
 
         state = _load_state(conv_id)
-        topic = _resolve_topic(extraction.topic, state.current_topic, extraction.intent)
+        topic = _resolve_topic(extraction.topic, state.current_topic)
         merged_birth_info = merge_birth_info(state.birth_info, extraction.birth_info)
         state.birth_info = merged_birth_info
         state.current_topic = topic or state.current_topic
@@ -114,11 +114,14 @@ def handle_chat(message: str, conversation_id: str | None = None) -> dict[str, A
             )
 
             clarify = extraction.intent == "clarify_previous"
+            prior_messages = _prior_messages(conv_id, user_message["id"])
             reply, chat_state, generation_trace = build_consultation_reply(
                 topic,
                 tool_result,
                 source_basis=state.source_basis,
                 clarify_previous=clarify,
+                user_message=message,
+                history=prior_messages,
             )
             tracer.add(
                 "generate_reply",
@@ -217,6 +220,7 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
     topic: Topic | None = None
     status = "success"
     error: str | None = None
+    assistant_message_id: str | None = None
     reply_parts: list[str] = []
     chat_state = ChatState(topic=None, needs_more_info=False, missing_fields=[], suggested_followups=[])
 
@@ -228,7 +232,7 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
                    summary="Extracted intent, topic, and birth information.")
 
         state = _load_state(conv_id)
-        topic = _resolve_topic(extraction.topic, state.current_topic, extraction.intent)
+        topic = _resolve_topic(extraction.topic, state.current_topic)
         merged_birth_info = merge_birth_info(state.birth_info, extraction.birth_info)
         state.birth_info = merged_birth_info
         state.current_topic = topic or state.current_topic
@@ -262,10 +266,13 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
                                 f"Unresolved: {arb_summary['unresolved']}."))
 
             clarify = extraction.intent == "clarify_previous"
+            prior_messages = _prior_messages(conv_id, user_message["id"])
             for chunk, final_state, generation_trace in stream_consultation_reply(
                 topic, tool_result,
                 source_basis=state.source_basis,
                 clarify_previous=clarify,
+                user_message=message,
+                history=prior_messages,
             ):
                 if chunk:
                     reply_parts.append(chunk)
@@ -283,6 +290,7 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
             conv_id, "assistant", full_reply,
             analysis_id=analysis_id, metadata=chat_state.dict(),
         )
+        assistant_message_id = assistant_message["id"]
         tracer.add("persist_state", input_data={}, output_data=state.dict(),
                    summary="Persisted conversation state.")
 
@@ -292,14 +300,17 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
         err_reply = "分析未能完成，请稍后再试。"
         reply_parts.append(err_reply)
         yield json.dumps({"type": "error", "detail": error}, ensure_ascii=False) + "\n"
-        repository.add_message(conv_id, "assistant", err_reply, analysis_id=analysis_id,
-                               metadata=chat_state.dict())
+        assistant_message = repository.add_message(
+            conv_id, "assistant", err_reply,
+            analysis_id=analysis_id, metadata=chat_state.dict(),
+        )
+        assistant_message_id = assistant_message["id"]
         tracer.add("error", input_data={"message": message},
                    output_data={"error": error}, summary="Agent run failed.")
 
     repository.finish_agent_run(
         run["id"],
-        assistant_message_id=None,
+        assistant_message_id=assistant_message_id,
         status=status, intent=intent, topic=topic,
         started_monotonic=started, error=error,
         metadata={"analysis_id": analysis_id},
@@ -323,16 +334,18 @@ def _load_state(conversation_id: str) -> ConversationState:
         return ConversationState()
 
 
-def _resolve_topic(
-    extracted: Topic | None,
-    current: Topic | None,
-    intent: str,
-) -> Topic | None:
-    if extracted:
-        return extracted
-    if intent == "clarify_previous":
-        return current
-    return current
+def _prior_messages(conversation_id: str, current_message_id: str) -> list[dict[str, Any]]:
+    """Persisted turns before the current user message (for follow-up context)."""
+    return [
+        m
+        for m in repository.get_conversation_messages(conversation_id)
+        if m["id"] != current_message_id
+    ]
+
+
+def _resolve_topic(extracted: Topic | None, current: Topic | None) -> Topic | None:
+    """Keep the prior topic unless the new message names a different one."""
+    return extracted or current
 
 
 def _should_ask_topic(intent: str, topic: Topic | None, birth_info: BirthInfo) -> bool:
@@ -356,4 +369,3 @@ def _new_unique_analysis_id() -> str:
         if repository.get_analysis_package(candidate) is None:
             return candidate
     return new_analysis_id()
-
