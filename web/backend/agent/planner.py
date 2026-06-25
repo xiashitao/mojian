@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Iterator
+from datetime import datetime
 from typing import Any
 
 from ..services import llm
@@ -20,6 +21,8 @@ from .responder import (
 )
 from .tools import run_bazibase_tools
 from .tracing import TraceWriter
+
+from bazibase import solar_ganzhi_year
 
 
 def stream_chat(message: str, conversation_id: str | None = None, *, user_id: str | None = None, memory_key: str | None = None) -> Iterator[str]:
@@ -98,7 +101,15 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
             yield json.dumps({"type": "token", "text": reply}, ensure_ascii=False) + "\n"
             reply_parts.append(reply)
         else:
-            tool_result = run_bazibase_tools(merged_birth_info)
+            # Inject "now" here — the only place the agent reads the clock — so
+            # the chart resolves its current 大运 + 流年 as the shared basis for
+            # all downstream judgments, while the engine stays clock-free. Use
+            # the 立春-based 干支 year (not the calendar year): before 立春 the
+            # 流年 still belongs to the previous 干支 year.
+            tool_result = run_bazibase_tools(
+                merged_birth_info,
+                reference_year=solar_ganzhi_year(datetime.now()),
+            )
             tracer.add("cast_chart", input_data=merged_birth_info.model_dump(),
                        output_data=tool_result["chart"], summary="Casted Ba Zi chart.")
             tracer.add("diagnose",

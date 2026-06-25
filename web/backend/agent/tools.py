@@ -27,7 +27,7 @@ _TOOL_CACHE: "OrderedDict[tuple, dict[str, Any]]" = OrderedDict()
 _TOOL_CACHE_MAX = 256
 
 
-def _cache_key(birth_info: BirthInfo) -> tuple:
+def _cache_key(birth_info: BirthInfo, reference_year: int | None) -> tuple:
     return (
         birth_info.birth_date,
         birth_info.birth_time,
@@ -35,21 +35,34 @@ def _cache_key(birth_info: BirthInfo) -> tuple:
         birth_info.gender,
         birth_info.tz_offset_hours,
         birth_info.apply_solar_time_correction,
+        reference_year,  # 大运/流年 anchor — different years must not share a cache slot
     )
 
 
-def run_bazibase_tools(birth_info: BirthInfo) -> dict[str, Any]:
-    """Chart casting + diagnosis + arbitration, cached by birth determinants."""
+def run_bazibase_tools(
+    birth_info: BirthInfo,
+    *,
+    reference_year: int | None = None,
+) -> dict[str, Any]:
+    """Chart casting + diagnosis + arbitration, cached by birth determinants.
+
+    Args:
+        birth_info: Complete birth information.
+        reference_year: Consultation temporal anchor. When given, the chart
+            resolves its active 大运 + 流年 at cast time (`current_period`), so
+            those become the shared basis for all downstream judgments. The
+            caller injects "now"; the engine never reads the clock.
+    """
     if not birth_info.is_complete():
         raise ValueError(f"birth info incomplete: {birth_info.complete_missing_fields()}")
 
-    key = _cache_key(birth_info)
+    key = _cache_key(birth_info, reference_year)
     cached = _TOOL_CACHE.get(key)
     if cached is not None:
         _TOOL_CACHE.move_to_end(key)
         return cached
 
-    result = _compute_bazibase_tools(birth_info)
+    result = _compute_bazibase_tools(birth_info, reference_year)
     _TOOL_CACHE[key] = result
     _TOOL_CACHE.move_to_end(key)
     if len(_TOOL_CACHE) > _TOOL_CACHE_MAX:
@@ -57,7 +70,10 @@ def run_bazibase_tools(birth_info: BirthInfo) -> dict[str, Any]:
     return result
 
 
-def _compute_bazibase_tools(birth_info: BirthInfo) -> dict[str, Any]:
+def _compute_bazibase_tools(
+    birth_info: BirthInfo,
+    reference_year: int | None = None,
+) -> dict[str, Any]:
     birth_time = _parse_birth_datetime(birth_info.birth_date, birth_info.birth_time)
     chart = cast_chart(
         birth_time=birth_time,
@@ -65,6 +81,7 @@ def _compute_bazibase_tools(birth_info: BirthInfo) -> dict[str, Any]:
         gender=str(birth_info.gender),
         tz_offset_hours=birth_info.tz_offset_hours,
         apply_solar_time_correction=birth_info.apply_solar_time_correction,
+        reference_year=reference_year,
     )
     diagnosis = diagnose(chart)
     arbitration = prepare_arbitration(diagnosis)

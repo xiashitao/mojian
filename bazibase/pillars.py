@@ -28,11 +28,19 @@ Convention for the 子时 boundary (23:00–01:00):
 
 True solar time scope:
 
-    TST affects ONLY the hour pillar (hour branch determination). Year,
-    month, and day pillars use the original clock time, because 节气
-    boundaries are absolute astronomical instants whose published times
-    are in standard zone time (北京时间 for China). This matches the
-    convention used by most modern Ba Zi software.
+    - Year & month pillars use the standard-zone clock time, because 节气
+      boundaries are absolute astronomical instants whose published times
+      are in standard zone time (北京时间 for China).
+    - Day & hour pillars use the true solar time, because which 干支 day a
+      birth belongs to (including the 子时 midnight rollover) and which
+      时辰 it falls in are both *solar-position* questions about the birth
+      longitude. Deriving them from the same true-solar base keeps 日柱 and
+      时柱 internally consistent: a far-western birth just after midnight
+      whose true solar time is still the previous evening gets the previous
+      solar day's 日柱 *and* a matching 时柱, instead of a desynced pair.
+
+    If no true solar time is supplied, day & hour fall back to the clock
+    time (i.e. no correction).
 """
 from __future__ import annotations
 
@@ -222,7 +230,9 @@ def compute_four_pillars(
             "calling to_true_solar_time, not via tzinfo."
         )
 
-    solar = Solar.fromYmdHms(
+    # Year & month from the standard-zone clock time (节气 boundaries are
+    # absolute astronomical instants published in 北京时间).
+    solar_clock = Solar.fromYmdHms(
         clock_time.year,
         clock_time.month,
         clock_time.day,
@@ -230,16 +240,27 @@ def compute_four_pillars(
         clock_time.minute,
         clock_time.second,
     )
-    ec = solar.getLunar().getEightChar()
+    ec_clock = solar_clock.getLunar().getEightChar()
+    year_p = _make_pillar(ec_clock.getYearGan(), ec_clock.getYearZhi(), "year")
+    month_p = _make_pillar(ec_clock.getMonthGan(), ec_clock.getMonthZhi(), "month")
 
-    # Year/month/day from clock time.
-    year_p = _make_pillar(ec.getYearGan(), ec.getYearZhi(), "year")
-    month_p = _make_pillar(ec.getMonthGan(), ec.getMonthZhi(), "month")
-    day_p = _make_pillar(ec.getDayGan(), ec.getDayZhi(), "day")
+    # Day & hour from the true solar time (or clock time as fallback): the
+    # 干支 day and the 时辰 are both solar-position questions, so they share
+    # one time base to stay internally consistent across the midnight 子时.
+    solar_src = true_solar_time if true_solar_time is not None else clock_time
+    solar_day = Solar.fromYmdHms(
+        solar_src.year,
+        solar_src.month,
+        solar_src.day,
+        solar_src.hour,
+        solar_src.minute,
+        solar_src.second,
+    )
+    ec_day = solar_day.getLunar().getEightChar()
+    day_p = _make_pillar(ec_day.getDayGan(), ec_day.getDayZhi(), "day")
 
-    # Hour: branch from TST (or fallback to clock time), stem via 五鼠遁.
-    hour_time_src = true_solar_time if true_solar_time is not None else clock_time
-    hour_branch = _hour_branch_from_time(hour_time_src)
+    # Hour: branch from the solar time, stem via 五鼠遁 from the (matching) day stem.
+    hour_branch = _hour_branch_from_time(solar_src)
     hour_stem = _hour_stem_from_day_stem(day_p.stem, hour_branch)
     hour_p = _make_pillar(hour_stem, hour_branch, "hour")
 

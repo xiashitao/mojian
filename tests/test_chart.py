@@ -65,8 +65,9 @@ class TestCastChart:
         )
         d = c.to_dict()
         assert set(d.keys()) == {
-            "input", "true_solar_time", "day_master", "day_master_element",
-            "four_pillars", "strength", "luck"
+            "input", "standard_clock_time", "dst_applied", "true_solar_time",
+            "day_master", "day_master_element",
+            "four_pillars", "strength", "luck", "current_period"
         }
         assert set(d["input"].keys()) == {
             "birth_clock_time", "longitude", "tz_offset_hours", "gender"
@@ -134,3 +135,27 @@ class TestCastChart:
             luck_pillar_count=4,
         )
         assert len(c.luck.luck_pillars) == 4
+
+    def test_no_reference_year_leaves_current_period_none(self):
+        c = cast_chart(datetime(1893, 12, 26, 8, 0), longitude=112.9, gender="male")
+        assert c.current_period is None
+        assert c.to_dict()["current_period"] is None
+
+    def test_reference_year_attaches_current_period(self):
+        c = cast_chart(
+            datetime(1893, 12, 26, 8, 0),
+            longitude=112.9,
+            gender="male",
+            reference_year=1920,
+        )
+        assert c.current_period is not None
+        assert c.current_period.year == 1920
+        assert c.current_period.liunian.stem_branch == "庚申"
+        assert c.current_period.luck_pillar.pillar.stem_branch == "辛酉"
+        # Serialized form carries it too.
+        assert c.to_dict()["current_period"]["luck_pillar"]["stem_branch"] == "辛酉"
+
+    def test_reference_year_is_deterministic(self):
+        kwargs = dict(birth_time=datetime(1893, 12, 26, 8, 0), longitude=112.9,
+                      gender="male", reference_year=1920)
+        assert cast_chart(**kwargs).to_dict() == cast_chart(**kwargs).to_dict()

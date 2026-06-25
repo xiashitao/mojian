@@ -28,6 +28,11 @@ from .luck import LuckPillar, LuckInfo, compute_luck
 from .ten_gods import TenGodLabels, label_ten_gods, StemTenGod, HiddenStemTenGod
 from .strength import StrengthAssessment, assess_strength
 from .solar_time import to_true_solar_time, equation_of_time_minutes
+from .dst import is_china_dst, to_standard_time, CHINA_DST_PERIODS
+from .timeline import (
+    PeriodResolution, resolve_period, liunian_pillar, solar_ganzhi_year,
+    STATUS_PRE_LUCK, STATUS_ACTIVE, STATUS_BEYOND_RANGE,
+)
 from .constants import (
     STEMS, BRANCHES, STEM_INDEX, BRANCH_INDEX,
     STEM_ELEMENT, BRANCH_ELEMENT, STEM_POLARITY, BRANCH_POLARITY,
@@ -82,6 +87,11 @@ __all__ = [
     "StrengthAssessment", "assess_strength",
     # solar time
     "to_true_solar_time", "equation_of_time_minutes",
+    # daylight saving time
+    "is_china_dst", "to_standard_time", "CHINA_DST_PERIODS",
+    # timeline (大运/流年 resolution)
+    "PeriodResolution", "resolve_period", "liunian_pillar", "solar_ganzhi_year",
+    "STATUS_PRE_LUCK", "STATUS_ACTIVE", "STATUS_BEYOND_RANGE",
     # constants
     "STEMS", "BRANCHES", "STEM_INDEX", "BRANCH_INDEX",
     "STEM_ELEMENT", "BRANCH_ELEMENT", "STEM_POLARITY", "BRANCH_POLARITY",

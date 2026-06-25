@@ -177,6 +177,10 @@ def _context_from_tool_result(
         "cheng_bai": cheng.get("verdict"),
         "has_unresolved_cases": has_unresolved,
         "arbitration_decisions": arbitration_decisions,
+        # Current 大运/流年 resolved at cast time — the shared "now" for any
+        # time-sensitive part of the answer. May be None for charts cast
+        # without a reference_year.
+        "current_period": chart.get("current_period"),
         "source_basis": source_basis,
     }
 
@@ -348,8 +352,34 @@ def reflect_on_reply(
     return result
 
 
+def _summarize_current_period(cp: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Compact, grounding-friendly view of the current 大运/流年 for the prompt."""
+    if not cp:
+        return None
+    ln = cp.get("liunian", {})
+    lp = cp.get("luck_pillar")
+    summary: dict[str, Any] = {
+        "公历年": cp.get("year"),
+        "虚岁": cp.get("nominal_age"),
+        "流年十神": {
+            "天干": ln.get("stem_ten_god"),
+            "地支": ln.get("branch_ten_god"),
+        },
+    }
+    if lp:
+        summary["当前大运十神"] = {
+            "天干": lp.get("stem_ten_god"),
+            "地支": lp.get("branch_ten_god"),
+            "起止年龄": [lp.get("start_age"), lp.get("end_age")],
+        }
+    else:
+        # status == pre_luck / beyond_range
+        summary["当前大运"] = "尚未起运" if cp.get("status") == "pre_luck" else "超出推算范围"
+    return summary
+
+
 def _build_analysis_block(topic: Topic, context: dict[str, Any], *, clarify_previous: bool) -> dict[str, Any]:
-    return {
+    block = {
         "topic": topic,
         "clarify_previous": clarify_previous,
         "day_master": context.get("day_master"),
@@ -361,6 +391,10 @@ def _build_analysis_block(topic: Topic, context: dict[str, Any], *, clarify_prev
         "has_unresolved_cases": context.get("has_unresolved_cases"),
         "arbitration_decisions": context.get("arbitration_decisions", {}),
     }
+    current_period = _summarize_current_period(context.get("current_period"))
+    if current_period is not None:
+        block["current_period"] = current_period
+    return block
 
 
 def _build_stream_reply_prompt(
@@ -378,6 +412,9 @@ def _build_stream_reply_prompt(
         "请直接、充分地回答「用户当前的问题」，回答必须基于下方结构化分析结果，"
         "不要编造超出分析结论的内容，也不要重复之前已经说过的话。"
         "若有「过往咨询记录」，自然地保持一致、可适当呼应，但不要照搬复述。"
+        "分析结果里的 current_period 是用户「当下所处的大运和今年流年」；"
+        "当问题涉及近期、今年、当下时机或近几年走势时，要结合它来谈，"
+        "但同样用日常语言，不要报出干支或十神这类术语。"
         "不要提及具体流派名、古籍或后台规则，也不要堆砌命理术语。"
         "用日常语言展开，依次涵盖：直接结论、适配的条件或方向、需要注意的风险、一条可执行的建议。"
         "篇幅约300–500字，分2–4个自然段，语气沉稳克制。不要在结尾附上追问建议。"

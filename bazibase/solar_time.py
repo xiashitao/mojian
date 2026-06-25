@@ -41,6 +41,10 @@ def reference_longitude(tz_offset_hours: float) -> float:
     return 15.0 * tz_offset_hours
 
 
+def _is_leap_year(year: int) -> bool:
+    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+
+
 def equation_of_time_minutes(dt: datetime) -> float:
     """
     Approximate the equation of time in minutes for the given date.
@@ -49,16 +53,23 @@ def equation_of_time_minutes(dt: datetime) -> float:
     of high-precision ephemeris values, which is more than sufficient for
     Ba Zi purposes (hour branches are 2 hours wide).
 
+    The day-of-year is computed as a *fractional* value (including the time
+    of day) and normalised by the actual year length. This removes a
+    sub-minute leap-year offset that a fixed 365-day, integer-day model
+    introduces for dates after Feb 29.
+
     Returns:
         Offset in minutes to ADD to local mean solar time to get true
         solar time. Positive means the sun is "ahead" of mean noon.
     """
-    # Day of year (N). Use Jan 1 as N=1.
+    # Fractional day-of-year (Jan 1 00:00 -> n≈1.0).
     start_of_year = datetime(dt.year, 1, 1)
-    n = (dt - start_of_year).days + 1
+    n = (dt - start_of_year).total_seconds() / 86400.0 + 1.0
+    days_in_year = 366.0 if _is_leap_year(dt.year) else 365.0
 
-    # Spencer's formula angle (radians).
-    b = 2.0 * math.pi * (n - 81) / 365.0
+    # Spencer's formula angle (radians). 81 ≈ day-of-year of the spring
+    # equinox, the formula's anchor.
+    b = 2.0 * math.pi * (n - 81) / days_in_year
 
     # Standard approximation.
     eot_min = 9.87 * math.sin(2 * b) - 7.53 * math.cos(b) - 1.5 * math.sin(b)
@@ -102,6 +113,10 @@ def to_true_solar_time(
         raise ValueError(
             "clock_time must be a naive (timezone-unaware) datetime. "
             "Pass tz_offset_hours separately instead."
+        )
+    if not -180.0 <= longitude <= 180.0:
+        raise ValueError(
+            f"longitude must be within [-180, 180] degrees, got {longitude!r}."
         )
 
     ref_lon = reference_longitude(tz_offset_hours)
