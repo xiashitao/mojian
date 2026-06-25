@@ -1,4 +1,5 @@
 import { ThemeSwitcher } from "../../theme";
+import { AccountMenu } from "../auth/AccountMenu";
 
 export interface ChatHeaderProps {
   onToggleMobilePanel: () => void;
@@ -21,6 +22,7 @@ export function ChatHeader({ onToggleMobilePanel }: ChatHeaderProps) {
         <span className="chat-header__sub">看清局势 · 把握时机</span>
       </div>
       <div className="chat-header__actions">
+        <AccountMenu />
         <ThemeSwitcher />
       </div>
     </header>

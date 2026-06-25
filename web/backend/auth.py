@@ -4,29 +4,32 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
+import bcrypt
 from fastapi import Cookie, Depends, HTTPException, Response, status
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from .config import settings
 from .database import get_db
 
 Role = Literal["user", "pro", "max", "admin"]
 
-_pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 COOKIE_NAME = "kairos_token"
 COOKIE_MAX_AGE = settings.jwt_expire_days * 86400  # seconds
 
 
 # ── Password ──────────────────────────────────────────────────────────────
+# bcrypt directly (not passlib): avoids the passlib/bcrypt>=4.1 backend bug.
+# bcrypt only uses the first 72 bytes, so we truncate explicitly.
 
 def hash_password(plain: str) -> str:
-    return _pwd_ctx.hash(plain)
+    return bcrypt.hashpw(plain.encode("utf-8")[:72], bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_ctx.verify(plain, hashed)
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8")[:72], hashed.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
 
 
 # ── JWT ───────────────────────────────────────────────────────────────────

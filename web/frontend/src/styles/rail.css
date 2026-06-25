@@ -1,0 +1,323 @@
+/* ════════════════════════════════════════════════════
+   RIGHT · 案头 (Marginalia)
+   ════════════════════════════════════════════════════ */
+.insight-rail {
+  background: var(--ink-900);
+  border-left: 1px solid var(--rule-line);
+  padding: 22px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-600) transparent;
+}
+
+.insight-rail::-webkit-scrollbar {
+  width: 4px;
+}
+
+.insight-rail::-webkit-scrollbar-thumb {
+  background: var(--ink-600);
+  border-radius: 2px;
+}
+
+/* ── Seal card (analysis credential) ──────────────── */
+.seal-card {
+  position: relative;
+  padding: 18px 18px 16px;
+  background: var(--ink-850);
+  border-radius: 8px;
+}
+
+.seal-card::before,
+.seal-card::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: var(--cinnabar);
+  border-style: solid;
+  border-width: 0;
+}
+
+.seal-card::before {
+  top: -1px;
+  left: -1px;
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+
+.seal-card::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom-width: 1px;
+  border-right-width: 1px;
+}
+
+.seal-card__label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--bone-500);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.seal-card__id {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--cinnabar);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 0.15s;
+  word-break: break-all;
+}
+
+.seal-card__id:hover:not(:disabled) {
+  color: var(--vermilion);
+}
+
+.seal-card__id:disabled {
+  color: var(--bone-500);
+  cursor: default;
+}
+
+.seal-card__note {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--bone-500);
+  letter-spacing: 0.04em;
+}
+
+/* ── Rail cards (generic) ─────────────────────────── */
+.rail-card {
+  padding: 14px 16px;
+  background: var(--ink-850);
+  border-radius: 8px;
+}
+
+.rail-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.rail-card__label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--bone-500);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.rail-card__head .rail-card__label {
+  margin-bottom: 0;
+}
+
+.rail-card__value {
+  font-family: var(--font-cn);
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--bone-100);
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+}
+
+.rail-card__alert {
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: var(--cinnabar-soft);
+  border-left: 2px solid var(--cinnabar);
+  font-size: 12px;
+  color: var(--bone-300);
+  line-height: 1.5;
+}
+
+.rail-card__alert strong {
+  color: var(--cinnabar);
+  font-weight: 500;
+}
+
+.rail-card__meta {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--jade);
+  letter-spacing: 0.04em;
+}
+
+/* ── Birth info card ──────────────────────────────── */
+.rail-card--birth {
+  border-color: var(--bronze-wash);
+}
+
+.birth-grid {
+  margin: 6px 0 0;
+  display: grid;
+  gap: 5px;
+}
+
+.birth-row {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.birth-row dt {
+  font-family: var(--font-cn);
+  font-size: 12px;
+  color: var(--cinnabar);
+  text-align: center;
+  font-weight: 500;
+}
+
+.birth-row dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--bone-300);
+  letter-spacing: 0.02em;
+}
+
+/* ── Source authority card ────────────────────────── */
+.rail-card--source {
+  border-color: var(--bronze-wash);
+}
+
+.rail-source {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.rail-source__primary {
+  font-family: var(--font-cn);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--gold);
+  letter-spacing: 0.06em;
+}
+
+.rail-source__sep {
+  color: var(--bone-500);
+  font-size: 13px;
+}
+
+.rail-source__secondary {
+  font-family: var(--font-cn);
+  font-size: 13px;
+  color: var(--bone-300);
+  letter-spacing: 0.04em;
+}
+
+.rail-source__note {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--bone-500);
+  letter-spacing: 0.04em;
+  margin-top: 4px;
+}
+
+/* ── Followup chips in rail ───────────────────────── */
+.rail-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rail-chip {
+  padding: 7px 14px;
+  background: transparent;
+  border: 1px solid var(--rule-line-bright);
+  border-radius: 999px;
+  color: var(--bone-300);
+  font-family: var(--font-cn);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+
+.rail-chip:hover:not(:disabled) {
+  border-color: var(--cinnabar);
+  color: var(--cinnabar);
+  background: var(--cinnabar-soft);
+}
+
+.rail-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Admin trace card ─────────────────────────────── */
+.rail-card--admin {
+  border-color: var(--cinnabar-wash);
+}
+
+.rail-mini {
+  padding: 3px 10px;
+  background: transparent;
+  border: 1px solid var(--rule-line-bright);
+  border-radius: 6px;
+  color: var(--bone-400);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.rail-mini:hover {
+  border-color: var(--cinnabar);
+  color: var(--cinnabar);
+}
+
+.trace-error {
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: var(--cinnabar-soft);
+  border-left: 2px solid var(--cinnabar);
+  font-size: 11px;
+  color: var(--cinnabar);
+}
+
+.trace-json {
+  margin-top: 8px;
+  padding: 10px;
+  background: var(--ink-950);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--bone-300);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.trace-placeholder {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--bone-500);
+}
+
+/* ── Mobile scrim ─────────────────────────────────── */
+.oracle__scrim {
+  display: none;
+}
+

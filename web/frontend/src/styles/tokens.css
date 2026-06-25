@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-base: #0a0e1a;
+  --bg-panel: #111827;
+  --bg-card: #161e2e;
+  --bg-elevated: #1c2640;
+  --bg-hover: #222d44;
+  --border-default: #2a3650;
+  --border-subtle: #1e2840;
+  --border-accent: #3b6fe0;
+  --text-primary: #e2e8f0;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-dim: #94a3b8;
+  --accent-blue: #3b82f6;
+  --accent-cyan: #06b6d4;
+  --accent-amber: #f59e0b;
+  --accent-green: #10b981;
+  --accent-red: #ef4444;
+  --el-wood: #4ade80;
+  --el-fire: #f87171;
+  --el-earth: #facc15;
+  --el-metal: #cbd5e1;
+  --el-water: #60a5fa;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-cn: 'Inter', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-brand: 'Noto Serif SC', 'Songti SC', serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  /* "Kairos" wordmark — single source of truth so the brand name stays consistent */
+  --font-wordmark: 'Playfair Display', Georgia, serif;
+  --btn-primary-text: #0a0e1a;
+}
+
+[data-theme="light"] {
+  --bg-base: #f1f5f9;
+  --bg-panel: #ffffff;
+  --bg-card: #ffffff;
+  --bg-elevated: #f8fafc;
+  --bg-hover: #f1f5f9;
+  --border-default: #cbd5e1;
+  --border-subtle: #e2e8f0;
+  --border-accent: #2563eb;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #475569;
+  --text-dim: #475569;
+  --accent-blue: #2563eb;
+  --accent-cyan: #0e7490;
+  --accent-amber: #d97706;
+  --accent-green: #059669;
+  --accent-red: #dc2626;
+  --el-wood: #15803d;
+  --el-fire: #b91c1c;
+  --el-earth: #a16207;
+  --el-metal: #475569;
+  --el-water: #1d4ed8;
+  --btn-primary-text: #ffffff;
+}
+
+[data-theme="light"] .oracle {
+  --ink-950: #fefdfb;
+  --ink-900: #faf9f6;
+  --ink-850: #f7f5f2;
+  --ink-800: #f2efeb;
+  --ink-700: #eae7e2;
+  --ink-600: #dedad4;
+  --ink-500: #cfc9c1;
+
+  --bone-100: #1a1714;
+  --bone-200: #2c2622;
+  --bone-300: #4a433c;
+  --bone-400: #7a7168;
+  --bone-500: #746a5c;
+
+  --cinnabar: #8b5e4a;
+  --cinnabar-glow: rgba(139, 94, 74, 0.12);
+  --cinnabar-soft: rgba(139, 94, 74, 0.06);
+  --cinnabar-wash: rgba(139, 94, 74, 0.10);
+  --vermilion: #9a6b56;
+  --bronze: #7a6548;
+  --bronze-soft: rgba(122, 101, 72, 0.10);
+  --bronze-wash: rgba(122, 101, 72, 0.14);
+  --gold: #96794c;
+
+  --rule-line: rgba(94, 83, 69, 0.14);
+  --rule-line-bright: rgba(94, 83, 69, 0.22);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  font-size: 16px;
+  line-height: 1.65;
+  font-optical-sizing: auto;
+  font-kerning: normal;
+  text-rendering: optimizeLegibility;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-base); }
+::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+

@@ -23,11 +23,42 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8)
     name: str = Field("", max_length=64)
+    anon_id: str | None = None
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    anon_id: str | None = None
+
+
+def migrate_anonymous(anon_id: str | None, user_id: str) -> None:
+    """Re-key an anonymous visitor's conversations + memory onto their account."""
+    if not anon_id or anon_id == user_id:
+        return
+    conn = get_db()
+    try:
+        conn.execute(
+            "UPDATE conversations SET user_id = ? WHERE user_id = ?", (user_id, anon_id)
+        )
+        conn.execute(
+            "UPDATE user_memory_notes SET memory_key = ? WHERE memory_key = ?",
+            (user_id, anon_id),
+        )
+        # Birth info: keep the account's own if present, else adopt the anon's.
+        has_own = conn.execute(
+            "SELECT 1 FROM user_memory WHERE memory_key = ?", (user_id,)
+        ).fetchone()
+        if has_own:
+            conn.execute("DELETE FROM user_memory WHERE memory_key = ?", (anon_id,))
+        else:
+            conn.execute(
+                "UPDATE user_memory SET memory_key = ? WHERE memory_key = ?",
+                (user_id, anon_id),
+            )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 class UserOut(BaseModel):
@@ -53,6 +84,7 @@ def register(req: RegisterRequest, response: Response):
     finally:
         conn.close()
 
+    migrate_anonymous(req.anon_id, user_id)
     set_auth_cookie(response, create_token(user_id, "user"))
     return UserOut(id=user_id, email=req.email, name=req.name, role="user")
 
@@ -72,6 +104,7 @@ def login(req: LoginRequest, response: Response):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Incorrect email or password")
 
+    migrate_anonymous(req.anon_id, row["id"])
     set_auth_cookie(response, create_token(row["id"], row["role"]))
     return UserOut(id=row["id"], email=row["email"],
                    name=row["name"], role=row["role"])
