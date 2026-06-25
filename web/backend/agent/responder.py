@@ -40,6 +40,34 @@ def build_missing_info_reply(topic: Topic | None, birth_info: BirthInfo) -> tupl
     )
 
 
+def build_smalltalk_reply() -> tuple[str, ChatState]:
+    """Friendly reply for greetings / chit-chat — no chart casting."""
+    reply = (
+        "你好。我可以帮你结合命理看事业、感情、财运和性格的走向。"
+        "把出生年月日、出生时间、出生地和性别告诉我，再说说想了解什么，我们就可以开始。"
+    )
+    return reply, ChatState(
+        topic=None,
+        needs_more_info=False,
+        missing_fields=[],
+        suggested_followups=["看看我的事业方向", "我的性格优势是什么？"],
+    )
+
+
+def build_out_of_scope_reply() -> tuple[str, ChatState]:
+    """Polite redirect for requests outside the product's scope."""
+    reply = (
+        "这个问题超出了我能帮你看的范围。我专注于结合命理给事业、感情、财运、性格方面的分析参考，"
+        "不提供医疗、投资指令或其它专业建议。如果你愿意，可以从这几个方向问我。"
+    )
+    return reply, ChatState(
+        topic=None,
+        needs_more_info=False,
+        missing_fields=[],
+        suggested_followups=["事业方向怎么选？", "我的性格优势是什么？"],
+    )
+
+
 def build_consultation_reply(
     topic: Topic | None,
     tool_result: dict[str, Any],
@@ -55,7 +83,7 @@ def build_consultation_reply(
     arbitration = tool_result["arbitration"]
     context = _context_from_tool_result(chart, diagnosis, arbitration, source_basis)
 
-    followups = _followups(actual_topic)
+    followups = _followups(actual_topic, history)
     prompt = _build_reply_prompt(
         actual_topic,
         context,
@@ -121,7 +149,6 @@ def stream_consultation_reply(
     diagnosis = tool_result["diagnosis"]
     arbitration = tool_result["arbitration"]
     context = _context_from_tool_result(chart, diagnosis, arbitration, source_basis)
-    followups = _followups(actual_topic)
 
     if not settings.deepseek_api_key:
         if clarify_previous:
@@ -134,17 +161,14 @@ def stream_consultation_reply(
             reply = _wealth_reply(context)
         else:
             reply = _personality_reply(context)
-        if followups:
-            reply += "\n\n你可以继续问：" + " / ".join(followups)
-        state = ChatState(topic=actual_topic, needs_more_info=False,
-                         missing_fields=[], suggested_followups=followups)
+        state = ChatState(topic=actual_topic, needs_more_info=False, missing_fields=[],
+                          suggested_followups=_followups(actual_topic, history))
         generation_trace = {"mode": "deterministic_template", "topic": actual_topic}
         yield reply, state, generation_trace
         return
 
     prompt = _build_stream_reply_prompt(actual_topic, context,
                                          clarify_previous=clarify_previous,
-                                         followups=followups,
                                          user_message=user_message,
                                          history=history)
     collected = []
@@ -161,16 +185,19 @@ def stream_consultation_reply(
             reply = _career_reply(context)
         else:
             reply = _personality_reply(context)
-        state = ChatState(topic=actual_topic, needs_more_info=False,
-                         missing_fields=[], suggested_followups=followups)
+        state = ChatState(topic=actual_topic, needs_more_info=False, missing_fields=[],
+                          suggested_followups=_followups(actual_topic, history))
         yield reply, state, {"mode": "deterministic_template_fallback", "topic": actual_topic}
         return
 
     full_reply = "".join(collected)
+    followups = generate_followups(actual_topic, context, history, full_reply,
+                                   user_message=user_message)
     state = ChatState(topic=actual_topic, needs_more_info=False,
                      missing_fields=[], suggested_followups=followups)
     generation_trace = {"mode": "deepseek_stream", "topic": actual_topic,
-                        "reply": full_reply, "raw_response": full_reply}
+                        "reply": full_reply, "raw_response": full_reply,
+                        "followups": followups}
     yield "", state, generation_trace
 
 
@@ -289,14 +316,87 @@ def _conservative_prefix(ctx: dict[str, Any]) -> str:
     return ""
 
 
-def _followups(topic: Topic) -> list[str]:
-    if topic == "career":
-        return ["我适合什么行业？", "适合单干还是合伙？", "现在更适合创业还是上班？"]
-    if topic == "relationship":
-        return ["我适合怎样的伴侣？", "感情里最需要注意什么？"]
-    if topic == "wealth":
-        return ["我适合靠什么赚钱？", "合作和投资要注意什么？"]
-    return ["我的优势在哪里？", "压力大的时候怎么调整？"]
+_FOLLOWUP_POOL: dict[str, list[str]] = {
+    "career": ["我适合什么行业？", "适合单干还是合伙？", "现在更适合创业还是上班？",
+               "我适合什么样的岗位？", "事业上最该避开什么？", "怎么发挥我的长处？"],
+    "relationship": ["我适合怎样的伴侣？", "感情里最需要注意什么？", "我容易遇到什么样的人？",
+                     "怎么经营好长期关系？", "我的感情短板在哪？"],
+    "wealth": ["我适合靠什么赚钱？", "合作和投资要注意什么？", "我更适合正财还是偏财？",
+               "怎么守住已有的财？", "我的财务风险点在哪？"],
+    "personality": ["我的优势在哪里？", "压力大的时候怎么调整？", "我的短板是什么？",
+                    "我适合怎样的成长方式？", "别人通常怎么看我？"],
+}
+
+
+def _asked_questions(history: list[dict[str, Any]] | None) -> set[str]:
+    if not history:
+        return set()
+    return {str(m.get("content", "")).strip() for m in history if m.get("role") == "user"}
+
+
+def _followups(
+    topic: Topic | None,
+    history: list[dict[str, Any]] | None = None,
+    *,
+    count: int = 3,
+) -> list[str]:
+    """History-aware fallback follow-ups: drop already-asked, rotate per turn."""
+    pool = _FOLLOWUP_POOL.get(topic or "personality", _FOLLOWUP_POOL["personality"])
+    asked = _asked_questions(history)
+    fresh = [q for q in pool if q not in asked]
+    candidates = fresh if len(fresh) >= count else pool
+    turns = sum(1 for m in (history or []) if m.get("role") == "assistant")
+    start = (turns * count) % len(candidates)
+    rotated = candidates[start:] + candidates[:start]
+    return rotated[:count]
+
+
+def generate_followups(
+    topic: Topic | None,
+    context: dict[str, Any],
+    history: list[dict[str, Any]] | None,
+    reply: str,
+    *,
+    user_message: str = "",
+    count: int = 3,
+) -> list[str]:
+    """LLM-generated follow-ups grounded in the current Q&A + session history.
+
+    Falls back to the history-aware pool when no LLM is configured or on error.
+    """
+    fallback = _followups(topic, history, count=count)
+    if not settings.deepseek_api_key:
+        return fallback
+
+    system_prompt = (
+        "用户刚问了一个命理咨询问题并得到了回答。请基于这段对话，"
+        f"提出用户接下来最可能继续问的 {count} 个问题。严格遵守：\n"
+        "1. 必须是「下一步」的问题：在回答基础上深入某一点，或转向相关但全新的角度；\n"
+        "2. 绝对不要复述或改写「当前问题」，也不要与「已经问过的」重复或近义；\n"
+        "3. 要与「回答」的建议方向一致，不要建议回答里明确不推荐的做法；\n"
+        "4. 用日常口语，不要出现命理术语、古籍或流派名（如偏财格、财星救应、用神这类都不要）；\n"
+        "5. 每个不超过15字，具体、彼此不同，不要序号或引号前缀；\n"
+        '6. 只输出 JSON 字符串数组，例如 ["问题一","问题二"]。'
+    )
+    user_prompt = json.dumps(
+        {
+            "topic": topic,
+            "当前问题": user_message,
+            "回答": reply,
+            "近期对话": _render_history(history),
+            "已经问过的": sorted(_asked_questions(history)),
+        },
+        ensure_ascii=False,
+    )
+    try:
+        raw = call_deepseek(system_prompt, user_prompt, temperature=0.6)
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            data = next((v for v in data.values() if isinstance(v, list)), [])
+        items = [str(x).strip() for x in data if str(x).strip()]
+        return items[:count] or fallback
+    except (DeepSeekAPIError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        return fallback
 
 
 def _topic_cn(topic: Topic | None) -> str:
@@ -345,21 +445,19 @@ def _build_stream_reply_prompt(
     context: dict[str, Any],
     *,
     clarify_previous: bool,
-    followups: list[str],
     user_message: str = "",
     history: list[dict[str, Any]] | None = None,
 ) -> dict[str, str]:
     """Streaming (non-JSON) prompt that answers the user's current question."""
     system_prompt = (
-        "你是一位谨慎、专业、简洁的命理咨询助手。"
-        "请直接回答「用户当前的问题」，回答必须基于下方结构化分析结果，"
+        "你是一位谨慎、专业的命理咨询助手。"
+        "请直接、充分地回答「用户当前的问题」，回答必须基于下方结构化分析结果，"
         "不要编造超出分析结论的内容，也不要重复之前已经说过的话。"
-        "不要提及具体流派名、古籍或后台规则。"
-        "回答控制在200字以内，语气沉稳克制。"
-        "最后另起一行推荐1-2个追问方向，格式：\n你可以继续问：问题1 / 问题2"
+        "不要提及具体流派名、古籍或后台规则，也不要堆砌命理术语。"
+        "用日常语言展开，依次涵盖：直接结论、适配的条件或方向、需要注意的风险、一条可执行的建议。"
+        "篇幅约300–500字，分2–4个自然段，语气沉稳克制。不要在结尾附上追问建议。"
     )
     analysis_block = _build_analysis_block(topic, context, clarify_previous=clarify_previous)
-    analysis_block["followup_candidates"] = followups
 
     parts = [
         "## 结构化分析结果",

@@ -1,4 +1,5 @@
 import { apiGet } from "./client";
+import { getAnonId } from "../utils/anonId";
 import type { ChatAnalysis, ChatRequest, ChatResponse } from "../types/api";
 
 const BASE_URL = "/api";
@@ -40,6 +41,7 @@ async function _mockStream(
 export async function sendChatMessage(
   req: ChatRequest,
   onToken: (text: string) => void,
+  signal?: AbortSignal,
 ): Promise<ChatResponse> {
   if (MOCK_MODE) return _mockStream(onToken);
 
@@ -47,7 +49,8 @@ export async function sendChatMessage(
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(req),
+    body: JSON.stringify({ ...req, anon_id: getAnonId() }),
+    signal,
   });
 
   if (!res.ok || !res.body) {

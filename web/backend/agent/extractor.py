@@ -60,7 +60,11 @@ _EXTRACT_SYSTEM_PROMPT = """\
    - "personality" — 问性格、优势、短板相关
    - "clarify_previous" — 追问上一轮回答的原因或依据
    - "collect_birth_info" — 只提供了出生信息，没有明确问题
+   - "smalltalk" — 打招呼、寒暄、感谢、闲聊，没有命理咨询诉求（如"你好""在吗""谢谢"）
+   - "out_of_scope" — 明确超出能力范围：健康/疾病、具体投资选股指令、与命理咨询无关的请求
    - "unknown" — 无法判断
+
+注意：若用户同时提供了出生信息或明确的命理问题，优先归到对应意图，不要判为 smalltalk。
 
 2. **topic**: 咨询方向。"career"/"relationship"/"wealth"/"personality" 或 null
 
@@ -128,7 +132,8 @@ def _extract_with_llm(text: str) -> ExtractionResult | None:
 
     intent = data.get("intent", "unknown")
     if intent not in ("career", "relationship", "wealth", "personality",
-                       "clarify_previous", "collect_birth_info", "unknown"):
+                       "clarify_previous", "collect_birth_info",
+                       "smalltalk", "out_of_scope", "unknown"):
         intent = "unknown"
 
     topic = data.get("topic")
@@ -213,6 +218,12 @@ def _detect_intent(text: str, topic: Topic | None) -> Intent:
         return topic
     if _has_birth_signal(text):
         return "collect_birth_info"
+    if any(k in text for k in ("股票", "选股", "彩票", "买基金", "看病", "头疼",
+                               "头痛", "生病", "吃药", "诊断", "确诊")):
+        return "out_of_scope"
+    if any(k in text for k in ("你好", "您好", "在吗", "在么", "谢谢", "多谢",
+                               "嗨", "哈喽", "hi", "hello")):
+        return "smalltalk"
     return "unknown"
 
 

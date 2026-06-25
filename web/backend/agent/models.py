@@ -12,10 +12,22 @@ Intent = Literal[
     "wealth",
     "personality",
     "clarify_previous",
+    "smalltalk",
+    "out_of_scope",
     "unknown",
 ]
 
 Topic = Literal["career", "relationship", "wealth", "personality"]
+
+# The single dispatchable decision the planner acts on.
+Action = Literal[
+    "smalltalk",
+    "out_of_scope",
+    "clarify",
+    "ask_birth_info",
+    "ask_topic",
+    "consult",
+]
 
 
 class BirthInfo(BaseModel):
@@ -68,6 +80,15 @@ class ChatState(BaseModel):
     needs_more_info: bool
     missing_fields: list[str] = Field(default_factory=list)
     suggested_followups: list[str] = Field(default_factory=list)
+
+
+class RouteDecision(BaseModel):
+    """The router's output: one action plus the resolved routing context."""
+    action: Action
+    intent: Intent = "unknown"
+    topic: Topic | None = None
+    birth_info: BirthInfo = Field(default_factory=BirthInfo)
+    missing_fields: list[str] = Field(default_factory=list)
 
 
 class ToolBundle(BaseModel):

@@ -1275,7 +1275,7 @@ body {
 }
 
 [data-theme="light"] .message--assistant .message__body {
-  background: var(--ink-800);
+  background: transparent;
 }
 
 [data-theme="light"] .message--user .message__body {
@@ -1963,6 +1963,24 @@ body {
   letter-spacing: 0.04em;
 }
 
+.chat-context__forget {
+  margin-left: auto;
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--rule-line);
+  border-radius: 999px;
+  color: var(--bone-500);
+  font-family: var(--font-cn);
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.chat-context__forget:hover {
+  color: var(--cinnabar);
+  border-color: var(--cinnabar);
+}
+
 .oracle-chat__scroll {
   flex: 1;
   overflow-y: auto;
@@ -2201,15 +2219,15 @@ body {
 
 .message--assistant {
   align-self: flex-start;
-  max-width: 86%;
+  max-width: 100%;
 }
 
+/* No bubble for assistant answers — they may hold images or other rich content. */
 .message--assistant .message__body {
-  /* soft rounded bubble; depth via ink step (no shadow — 无影 Rule) */
-  background: var(--ink-800);
+  background: transparent;
   color: var(--bone-200);
-  padding: 12px 17px;
-  border-radius: 18px 18px 18px 4px;
+  padding: 0;
+  border-radius: 0;
 }
 
 .message.is-error .message__body {
@@ -2233,6 +2251,13 @@ body {
   background: var(--cinnabar);
   opacity: 0.4;
   animation: ink-pulse 1.4s ease-in-out infinite;
+}
+
+/* Spinning Kairos logo shown while the assistant is analysing (pre-stream). */
+.message__thinking {
+  color: var(--bone-400);
+  animation: composer-spin 1.1s linear infinite;
+  transform-origin: center;
 }
 
 .message__loading span:nth-child(2) {
@@ -2445,6 +2470,16 @@ body {
   background: var(--ink-600);
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* stop button while a reply is streaming — neutral, distinct from send */
+.composer__send--stop {
+  background: var(--bone-200);
+  color: var(--ink-900);
+}
+
+.composer__send--stop:hover {
+  background: var(--bone-100);
 }
 
 .composer__send svg {

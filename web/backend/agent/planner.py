@@ -7,11 +7,18 @@ from collections.abc import Iterator
 from typing import Any
 
 from ..config import settings
-from . import repository
-from .extractor import extract_message, merge_birth_info
+from . import memory, repository
+from .extractor import merge_birth_info
 from .ids import new_analysis_id
-from .models import BirthInfo, ChatState, ConversationState, Topic
-from .responder import build_consultation_reply, build_missing_info_reply, stream_consultation_reply
+from .models import ChatState, ConversationState, Topic
+from .router import route
+from .responder import (
+    build_consultation_reply,
+    build_missing_info_reply,
+    build_out_of_scope_reply,
+    build_smalltalk_reply,
+    stream_consultation_reply,
+)
 from .tools import run_bazibase_tools
 from .tracing import TraceWriter
 
@@ -38,18 +45,18 @@ def handle_chat(message: str, conversation_id: str | None = None) -> dict[str, A
     error: str | None = None
 
     try:
-        extraction = extract_message(message)
-        intent = extraction.intent
+        state = _load_state(conv_id)
+        decision = route(message, state)
+        intent = decision.intent
+        topic = decision.topic
+        merged_birth_info = decision.birth_info
         tracer.add(
             "extract_input",
             input_data={"message": message},
-            output_data=extraction.dict(),
-            summary="Extracted intent, topic, and birth information from user message.",
+            output_data=decision.dict(),
+            summary=f"Routed to action={decision.action}.",
         )
 
-        state = _load_state(conv_id)
-        topic = _resolve_topic(extraction.topic, state.current_topic)
-        merged_birth_info = merge_birth_info(state.birth_info, extraction.birth_info)
         state.birth_info = merged_birth_info
         state.current_topic = topic or state.current_topic
         state.last_analysis_id = analysis_id
@@ -60,7 +67,25 @@ def handle_chat(message: str, conversation_id: str | None = None) -> dict[str, A
             summary="Merged extracted fields into conversation state.",
         )
 
-        if _should_ask_topic(extraction.intent, topic, merged_birth_info):
+        if decision.action in ("smalltalk", "out_of_scope"):
+            reply, chat_state = (
+                build_smalltalk_reply()
+                if decision.action == "smalltalk"
+                else build_out_of_scope_reply()
+            )
+            generation_trace = {
+                "mode": decision.action,
+                "reply": reply,
+                "raw_response": None,
+                "source_basis": state.source_basis,
+            }
+            tracer.add(
+                "generate_reply",
+                input_data={"intent": intent},
+                output_data=generation_trace,
+                summary=f"Handled {decision.action} without chart casting.",
+            )
+        elif decision.action == "ask_topic":
             reply, chat_state = _build_topic_question()
             generation_trace = {
                 "mode": "topic_question",
@@ -74,7 +99,7 @@ def handle_chat(message: str, conversation_id: str | None = None) -> dict[str, A
                 output_data=generation_trace,
                 summary="Asked user to choose a consultation topic.",
             )
-        elif not merged_birth_info.is_complete():
+        elif decision.action == "ask_birth_info":
             reply, chat_state = build_missing_info_reply(topic, merged_birth_info)
             generation_trace = {
                 "mode": "missing_info_followup",
@@ -84,7 +109,7 @@ def handle_chat(message: str, conversation_id: str | None = None) -> dict[str, A
             }
             tracer.add(
                 "generate_reply",
-                input_data={"missing_fields": merged_birth_info.complete_missing_fields()},
+                input_data={"missing_fields": decision.missing_fields},
                 output_data=generation_trace,
                 summary="Asked for missing birth information.",
             )
@@ -113,7 +138,7 @@ def handle_chat(message: str, conversation_id: str | None = None) -> dict[str, A
                 ),
             )
 
-            clarify = extraction.intent == "clarify_previous"
+            clarify = decision.action == "clarify"
             prior_messages = _prior_messages(conv_id, user_message["id"])
             reply, chat_state, generation_trace = build_consultation_reply(
                 topic,
@@ -193,7 +218,7 @@ def handle_chat(message: str, conversation_id: str | None = None) -> dict[str, A
     }
 
 
-def stream_chat(message: str, conversation_id: str | None = None, *, user_id: str | None = None) -> Iterator[str]:
+def stream_chat(message: str, conversation_id: str | None = None, *, user_id: str | None = None, memory_key: str | None = None) -> Iterator[str]:
     """Stream one user message response as newline-delimited JSON chunks.
 
     Yields:
@@ -204,7 +229,8 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
           {"type": "error", "detail": "..."}  — on failure
     """
     started = time.monotonic()
-    conversation = repository.ensure_conversation(conversation_id, user_id=user_id)
+    # Own the conversation by the memory key (user id, else anonymous id).
+    conversation = repository.ensure_conversation(conversation_id, user_id=memory_key or user_id)
     conv_id = conversation["id"]
     user_message = repository.add_message(conv_id, "user", message)
     analysis_id = _new_unique_analysis_id()
@@ -225,27 +251,45 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
     chat_state = ChatState(topic=None, needs_more_info=False, missing_fields=[], suggested_followups=[])
 
     try:
-        extraction = extract_message(message)
-        intent = extraction.intent
-        tracer.add("extract_input", input_data={"message": message},
-                   output_data=extraction.dict(),
-                   summary="Extracted intent, topic, and birth information.")
-
         state = _load_state(conv_id)
-        topic = _resolve_topic(extraction.topic, state.current_topic)
-        merged_birth_info = merge_birth_info(state.birth_info, extraction.birth_info)
+        # Seed remembered birth info so returning users skip re-entering it.
+        if not state.birth_info.is_complete():
+            remembered = memory.get_birth_info(memory_key)
+            if remembered:
+                state.birth_info = merge_birth_info(remembered, state.birth_info)
+
+        decision = route(message, state)
+        intent = decision.intent
+        topic = decision.topic
+        merged_birth_info = decision.birth_info
+        tracer.add("extract_input", input_data={"message": message},
+                   output_data=decision.dict(),
+                   summary=f"Routed to action={decision.action}.")
+
         state.birth_info = merged_birth_info
         state.current_topic = topic or state.current_topic
         state.last_analysis_id = analysis_id
+        memory.save_birth_info(memory_key, merged_birth_info)
         tracer.add("merge_session_state",
                    input_data={"previous_state": repository.get_conversation_state(conv_id)},
                    output_data=state.dict(), summary="Merged session state.")
 
-        if _should_ask_topic(extraction.intent, topic, merged_birth_info):
+        if decision.action in ("smalltalk", "out_of_scope"):
+            reply, chat_state = (
+                build_smalltalk_reply()
+                if decision.action == "smalltalk"
+                else build_out_of_scope_reply()
+            )
+            yield json.dumps({"type": "token", "text": reply}, ensure_ascii=False) + "\n"
+            reply_parts.append(reply)
+            tracer.add("generate_reply", input_data={"intent": intent},
+                       output_data={"mode": decision.action, "reply": reply},
+                       summary=f"Handled {decision.action} without chart casting.")
+        elif decision.action == "ask_topic":
             reply, chat_state = _build_topic_question()
             yield json.dumps({"type": "token", "text": reply}, ensure_ascii=False) + "\n"
             reply_parts.append(reply)
-        elif not merged_birth_info.is_complete():
+        elif decision.action == "ask_birth_info":
             reply, chat_state = build_missing_info_reply(topic, merged_birth_info)
             yield json.dumps({"type": "token", "text": reply}, ensure_ascii=False) + "\n"
             reply_parts.append(reply)
@@ -265,7 +309,7 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
                                 f"Resolved: {arb_summary['resolved']}, "
                                 f"Unresolved: {arb_summary['unresolved']}."))
 
-            clarify = extraction.intent == "clarify_previous"
+            clarify = decision.action == "clarify"
             prior_messages = _prior_messages(conv_id, user_message["id"])
             for chunk, final_state, generation_trace in stream_consultation_reply(
                 topic, tool_result,
@@ -341,15 +385,6 @@ def _prior_messages(conversation_id: str, current_message_id: str) -> list[dict[
         for m in repository.get_conversation_messages(conversation_id)
         if m["id"] != current_message_id
     ]
-
-
-def _resolve_topic(extracted: Topic | None, current: Topic | None) -> Topic | None:
-    """Keep the prior topic unless the new message names a different one."""
-    return extracted or current
-
-
-def _should_ask_topic(intent: str, topic: Topic | None, birth_info: BirthInfo) -> bool:
-    return birth_info.is_complete() and topic is None and intent in ("collect_birth_info", "unknown")
 
 
 def _build_topic_question() -> tuple[str, ChatState]:

@@ -16,8 +16,15 @@ def chat(
 ):
     """Handle one user chat message, streaming reply as NDJSON."""
     user_id = user.id if user else None
+    # Memory is keyed to the logged-in user when available, else the anon id.
+    memory_key = user_id or req.anon_id
     return StreamingResponse(
-        stream_chat(req.message, req.conversation_id, user_id=user_id),
+        stream_chat(
+            req.message,
+            req.conversation_id,
+            user_id=user_id,
+            memory_key=memory_key,
+        ),
         media_type="application/x-ndjson",
     )
 

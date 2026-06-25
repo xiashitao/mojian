@@ -188,41 +188,30 @@ def add_trace(
 
 
 def list_conversations(limit: int = 50, user_id: str | None = None) -> list[dict]:
-    """List conversations ordered by most recent activity, with topic + excerpt."""
+    """List a single owner's conversations, most recent first.
+
+    Requires an owner key (logged-in user id or anonymous id). Without one we
+    return nothing rather than leaking every conversation in the database.
+    """
+    if not user_id:
+        return []
     conn = get_db()
     try:
-        if user_id:
-            rows = conn.execute(
-                """SELECT
-                       c.id, c.title, c.metadata_json, c.status,
-                       c.created_at, c.updated_at, c.last_message_at,
-                       (SELECT COUNT(*) FROM messages m
-                        WHERE m.conversation_id = c.id) AS message_count,
-                       (SELECT m2.content FROM messages m2
-                        WHERE m2.conversation_id = c.id AND m2.role = 'user'
-                        ORDER BY m2.created_at ASC LIMIT 1) AS excerpt
-                   FROM conversations c
-                   WHERE c.status = 'active' AND c.user_id = ?
-                   ORDER BY c.last_message_at DESC, c.created_at DESC
-                   LIMIT ?""",
-                (user_id, limit),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                """SELECT
-                       c.id, c.title, c.metadata_json, c.status,
-                       c.created_at, c.updated_at, c.last_message_at,
-                       (SELECT COUNT(*) FROM messages m
-                        WHERE m.conversation_id = c.id) AS message_count,
-                       (SELECT m2.content FROM messages m2
-                        WHERE m2.conversation_id = c.id AND m2.role = 'user'
-                        ORDER BY m2.created_at ASC LIMIT 1) AS excerpt
-                   FROM conversations c
-                   WHERE c.status = 'active'
-                   ORDER BY c.last_message_at DESC, c.created_at DESC
-                   LIMIT ?""",
-                (limit,),
-            ).fetchall()
+        rows = conn.execute(
+            """SELECT
+                   c.id, c.title, c.metadata_json, c.status,
+                   c.created_at, c.updated_at, c.last_message_at,
+                   (SELECT COUNT(*) FROM messages m
+                    WHERE m.conversation_id = c.id) AS message_count,
+                   (SELECT m2.content FROM messages m2
+                    WHERE m2.conversation_id = c.id AND m2.role = 'user'
+                    ORDER BY m2.created_at ASC LIMIT 1) AS excerpt
+               FROM conversations c
+               WHERE c.status = 'active' AND c.user_id = ?
+               ORDER BY c.last_message_at DESC, c.created_at DESC
+               LIMIT ?""",
+            (user_id, limit),
+        ).fetchall()
         result = []
         for row in rows:
             d = dict(row)

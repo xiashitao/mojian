@@ -34,6 +34,14 @@ CREATE TABLE IF NOT EXISTS saved_charts (
 )
 """
 
+_CREATE_USER_MEMORY = """
+CREATE TABLE IF NOT EXISTS user_memory (
+    memory_key      TEXT PRIMARY KEY,
+    birth_info_json TEXT NOT NULL DEFAULT '{}',
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+)
+"""
+
 _CREATE_CONVERSATIONS = """
 CREATE TABLE IF NOT EXISTS conversations (
     id              TEXT PRIMARY KEY,
@@ -118,6 +126,7 @@ def init_db():
     try:
         conn.execute(_CREATE_USERS)
         conn.execute(_CREATE_SAVED_CHARTS)
+        conn.execute(_CREATE_USER_MEMORY)
         conn.execute(_CREATE_CONVERSATIONS)
         conn.execute(_CREATE_MESSAGES)
         conn.execute(_CREATE_AGENT_RUNS)

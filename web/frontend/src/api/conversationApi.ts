@@ -1,13 +1,16 @@
 import { apiGet } from "./client";
+import { getAnonId } from "../utils/anonId";
 import type {
   ConversationDetail,
   ConversationSummary,
 } from "../types/api";
 
 export function listConversations(): Promise<ConversationSummary[]> {
-  return apiGet<ConversationSummary[]>("/conversations");
+  const anon = encodeURIComponent(getAnonId());
+  return apiGet<ConversationSummary[]>(`/conversations?anon_id=${anon}`);
 }
 
 export function getConversation(id: string): Promise<ConversationDetail> {
-  return apiGet<ConversationDetail>(`/conversations/${id}`);
+  const anon = encodeURIComponent(getAnonId());
+  return apiGet<ConversationDetail>(`/conversations/${id}?anon_id=${anon}`);
 }

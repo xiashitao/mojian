@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { sendChatMessage } from "../api/chatApi";
+import { forgetMemory } from "../api/memoryApi";
 import { getConversation } from "../api/conversationApi";
 import type { ChatState, Topic } from "../types/api";
 import type { BirthInfo, MessageFeedback, UiMessage } from "../types/session";
@@ -32,6 +33,8 @@ export function useChatSession() {
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const sentRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const pendingPairRef = useRef<{ userId: string; pendingId: string; text: string } | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -86,6 +89,15 @@ export function useChatSession() {
 
   const goHome = useCallback(() => navigate("/"), [navigate]);
 
+  const forget = useCallback(async () => {
+    try {
+      await forgetMemory();
+    } catch {
+      // best-effort; nothing to surface
+    }
+    setBirthInfo(null);
+  }, []);
+
   const send = useCallback(
     async (textInput?: string) => {
       const text = (textInput ?? input).trim();
@@ -94,6 +106,9 @@ export function useChatSession() {
       const userId = `local-${crypto.randomUUID()}`;
       const pendingId = `pending-${crypto.randomUUID()}`;
       const now = new Date().toISOString();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      pendingPairRef.current = { userId, pendingId, text };
       setMessages((prev) => [
         ...prev,
         { id: userId, role: "user", content: text, analysis_id: null, created_at: now },
@@ -112,6 +127,7 @@ export function useChatSession() {
               ),
             );
           },
+          controller.signal,
         );
         setConversationId(res.conversation_id);
         navigate(`/session/${res.conversation_id}`, { replace: true });
@@ -125,6 +141,8 @@ export function useChatSession() {
         );
         refreshConversations();
       } catch (err) {
+        // Aborted by the user (stop button / Esc) — revert is handled in stop().
+        if (controller.signal.aborted) return;
         const message = err instanceof Error ? err.message : "发送失败";
         setMessages((prev) =>
           prev.map((m) =>
@@ -134,11 +152,36 @@ export function useChatSession() {
           ),
         );
       } finally {
+        if (abortRef.current === controller) abortRef.current = null;
         setLoading(false);
       }
     },
     [conversationId, input, loading, navigate, refreshConversations],
   );
+
+  const stop = useCallback(() => {
+    const controller = abortRef.current;
+    const pair = pendingPairRef.current;
+    if (!controller || !pair) return;
+    controller.abort();
+    abortRef.current = null;
+    // Revert: drop the just-sent user message and its pending reply, restore the text.
+    setMessages((prev) =>
+      prev.filter((m) => m.id !== pair.userId && m.id !== pair.pendingId),
+    );
+    setInput((current) => current || pair.text);
+    setLoading(false);
+  }, []);
+
+  // Press Esc while a reply is streaming to interrupt and revert.
+  useEffect(() => {
+    if (!loading) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") stop();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [loading, stop]);
 
   const setMessageFeedback = useCallback((id: string, feedback: MessageFeedback) => {
     setMessages((prev) =>
@@ -187,9 +230,11 @@ export function useChatSession() {
     setMobilePanel,
     bottomRef,
     send,
+    stop,
     startNew,
     selectConversation,
     setMessageFeedback,
     goHome,
+    forget,
   } as const;
 }

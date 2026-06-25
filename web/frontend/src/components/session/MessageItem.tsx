@@ -1,5 +1,6 @@
 import type { MessageFeedback, UiMessage } from "../../types/session";
 import { formatClock } from "../../utils/sessionFormat";
+import { KairosLogo } from "../KairosLogo";
 
 export interface MessageItemProps {
   message: UiMessage;
@@ -30,11 +31,7 @@ export function MessageItem({
     >
       <div className="message__body">
         {pending ? (
-          <span className="message__loading">
-            <span />
-            <span />
-            <span />
-          </span>
+          <KairosLogo size={24} className="message__thinking" />
         ) : (
           content
         )}

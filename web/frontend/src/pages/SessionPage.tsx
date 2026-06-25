@@ -24,10 +24,12 @@ export default function SessionPage() {
     setMobilePanel,
     bottomRef,
     send,
+    stop,
     startNew,
     selectConversation,
     setMessageFeedback,
     goHome,
+    forget,
   } = useChatSession();
 
   return (
@@ -64,6 +66,7 @@ export default function SessionPage() {
           <ChatContextBar
             topic={currentTopic ?? currentConv?.topic}
             birthInfo={birthInfo}
+            onForget={() => void forget()}
           />
           <MessageList
             messages={messages}
@@ -77,6 +80,7 @@ export default function SessionPage() {
             loading={loading}
             onChange={setInput}
             onSend={() => void send()}
+            onStop={stop}
           />
         </section>
       </main>

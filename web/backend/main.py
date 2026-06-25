@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import init_db
-from .routers import chart, arbitrate, charts_store, chat, admin, conversations
+from .routers import chart, arbitrate, charts_store, chat, admin, conversations, memory
 from .routers import auth as auth_router
 from .routers import mock_chat
 
@@ -54,3 +54,4 @@ app.include_router(charts_store.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(conversations.router, prefix="/api")
+app.include_router(memory.router, prefix="/api")

@@ -35,3 +35,19 @@ def test_extract_place_and_gender():
     assert extractor._extract_gender("男") == "male"
     assert extractor._extract_gender("女生") == "female"
     assert extractor._extract_gender("没说性别") is None
+
+
+def test_detect_intent_smalltalk():
+    assert extractor._detect_intent("你好", None) == "smalltalk"
+    assert extractor._detect_intent("谢谢你", None) == "smalltalk"
+
+
+def test_detect_intent_out_of_scope():
+    assert extractor._detect_intent("帮我选只股票", None) == "out_of_scope"
+    assert extractor._detect_intent("我最近头疼怎么办", None) == "out_of_scope"
+
+
+def test_detect_intent_actionable_beats_smalltalk():
+    # A greeting plus a real bazi request must route to the topic, not smalltalk.
+    text = "你好，我1990年5月15日北京出生，男，看事业"
+    assert extractor._detect_intent(text, extractor._detect_topic(text)) == "career"

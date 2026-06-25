@@ -33,3 +33,4 @@ class ChatRequest(BaseModel):
     """POST /api/chat request body."""
     message: str = Field(..., min_length=1)
     conversation_id: Optional[str] = None
+    anon_id: Optional[str] = None
