@@ -1,6 +1,7 @@
 """Tool wrappers around deterministic bazibase APIs."""
 from __future__ import annotations
 
+from collections import OrderedDict
 from datetime import datetime
 from typing import Any
 
@@ -14,17 +15,49 @@ from bazibase.arbitration import (
     prepare_arbitration,
 )
 
-from ..config import settings
-from ..services.deepseek import DeepSeekAPIError, call_deepseek
+from ..services.llm import LLMError, complete, is_configured
 from .models import BirthInfo
 from ..services.enrich import enrich_chart
 
 
+# A birth chart (and its diagnosis/arbitration) is deterministic in its inputs,
+# yet every follow-up turn would otherwise re-cast it and re-run the arbitration
+# LLM calls. Cache the whole tool result by the birth determinants (Cache pillar).
+_TOOL_CACHE: "OrderedDict[tuple, dict[str, Any]]" = OrderedDict()
+_TOOL_CACHE_MAX = 256
+
+
+def _cache_key(birth_info: BirthInfo) -> tuple:
+    return (
+        birth_info.birth_date,
+        birth_info.birth_time,
+        birth_info.longitude,
+        birth_info.gender,
+        birth_info.tz_offset_hours,
+        birth_info.apply_solar_time_correction,
+    )
+
+
 def run_bazibase_tools(birth_info: BirthInfo) -> dict[str, Any]:
-    """Run chart casting, diagnosis, and arbitration preparation."""
+    """Chart casting + diagnosis + arbitration, cached by birth determinants."""
     if not birth_info.is_complete():
         raise ValueError(f"birth info incomplete: {birth_info.complete_missing_fields()}")
 
+    key = _cache_key(birth_info)
+    cached = _TOOL_CACHE.get(key)
+    if cached is not None:
+        _TOOL_CACHE.move_to_end(key)
+        return cached
+
+    result = _compute_bazibase_tools(birth_info)
+    _TOOL_CACHE[key] = result
+    _TOOL_CACHE.move_to_end(key)
+    if len(_TOOL_CACHE) > _TOOL_CACHE_MAX:
+        _TOOL_CACHE.popitem(last=False)
+    return result
+
+
+def _compute_bazibase_tools(birth_info: BirthInfo) -> dict[str, Any]:
     birth_time = _parse_birth_datetime(birth_info.birth_date, birth_info.birth_time)
     chart = cast_chart(
         birth_time=birth_time,
@@ -47,19 +80,19 @@ def run_bazibase_tools(birth_info: BirthInfo) -> dict[str, Any]:
 
 def _resolve_arbitration(result: ArbitrationResult) -> ArbitrationResult:
     """Send each arbitration prompt to DeepSeek and parse responses."""
-    if not settings.deepseek_api_key or not result.prompts:
+    if not is_configured() or not result.prompts:
         return result
 
     for prompt in result.prompts:
         try:
-            raw = call_deepseek(
+            raw = complete(
                 prompt.system_prompt,
                 prompt.user_prompt,
                 temperature=0.0,
             )
             response = parse_arbitration_response(prompt.case, raw)
             result = attach_response(result, prompt.case.case_id, response)
-        except (DeepSeekAPIError, ArbitrationParseError):
+        except (LLMError, ArbitrationParseError):
             fallback = ArbitrationResponse(
                 case_id=prompt.case.case_id,
                 decision="无法判定",

@@ -9,8 +9,7 @@ from __future__ import annotations
 import json
 import re
 
-from ..config import settings
-from ..services.deepseek import DeepSeekAPIError, call_deepseek
+from ..services.llm import LLMError, complete, is_configured
 from .models import BirthInfo, ExtractionResult, Intent, Topic
 
 
@@ -118,16 +117,16 @@ def extract_message(message: str) -> ExtractionResult:
 
 
 def _extract_with_llm(text: str) -> ExtractionResult | None:
-    if not settings.deepseek_api_key:
+    if not is_configured():
         return None
     try:
-        raw = call_deepseek(
+        raw = complete(
             _EXTRACT_SYSTEM_PROMPT,
             text,
             temperature=0.0,
         )
         data = json.loads(raw)
-    except (DeepSeekAPIError, json.JSONDecodeError, ValueError):
+    except (LLMError, json.JSONDecodeError, ValueError):
         return None
 
     intent = data.get("intent", "unknown")
@@ -188,8 +187,8 @@ def _extract_with_llm(text: str) -> ExtractionResult | None:
 
 
 def merge_birth_info(current: BirthInfo, incoming: BirthInfo) -> BirthInfo:
-    data = current.dict()
-    for key, value in incoming.dict().items():
+    data = current.model_dump()
+    for key, value in incoming.model_dump().items():
         if key in ("missing_fields", "confidence"):
             continue
         if value not in (None, "", []):

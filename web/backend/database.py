@@ -42,6 +42,23 @@ CREATE TABLE IF NOT EXISTS user_memory (
 )
 """
 
+_CREATE_USER_MEMORY_NOTES = """
+CREATE TABLE IF NOT EXISTS user_memory_notes (
+    id          TEXT PRIMARY KEY,
+    memory_key  TEXT NOT NULL,
+    topic       TEXT,
+    question    TEXT,
+    conclusion  TEXT,
+    analysis_id TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+)
+"""
+
+_CREATE_USER_MEMORY_NOTES_INDEX = (
+    "CREATE INDEX IF NOT EXISTS idx_memory_notes_key "
+    "ON user_memory_notes(memory_key, created_at)",
+)
+
 _CREATE_CONVERSATIONS = """
 CREATE TABLE IF NOT EXISTS conversations (
     id              TEXT PRIMARY KEY,
@@ -127,6 +144,7 @@ def init_db():
         conn.execute(_CREATE_USERS)
         conn.execute(_CREATE_SAVED_CHARTS)
         conn.execute(_CREATE_USER_MEMORY)
+        conn.execute(_CREATE_USER_MEMORY_NOTES)
         conn.execute(_CREATE_CONVERSATIONS)
         conn.execute(_CREATE_MESSAGES)
         conn.execute(_CREATE_AGENT_RUNS)
@@ -134,6 +152,8 @@ def init_db():
         for statement in _CREATE_INDEXES:
             conn.execute(statement)
         for statement in _CREATE_USERS_INDEX:
+            conn.execute(statement)
+        for statement in _CREATE_USER_MEMORY_NOTES_INDEX:
             conn.execute(statement)
         conn.commit()
     finally:

@@ -17,13 +17,17 @@ def _memory_key(user: CurrentUser | None, anon_id: str | None) -> str | None:
 
 
 @router.post("/memory/birth-info")
-def get_remembered_birth_info(
+def get_remembered_memory(
     req: MemoryRequest,
     user: CurrentUser | None = Depends(get_optional_user),
 ):
-    """Return the remembered birth info (or null) for this user."""
-    info = memory.get_birth_info(_memory_key(user, req.anon_id))
-    return {"birth_info": info.dict() if info else None}
+    """Return what we remember about this user: birth info + recent notes."""
+    key = _memory_key(user, req.anon_id)
+    info = memory.get_birth_info(key)
+    return {
+        "birth_info": info.model_dump() if info else None,
+        "notes": memory.recent_notes(key),
+    }
 
 
 @router.post("/memory/forget")

@@ -5,8 +5,8 @@ import json
 from collections.abc import Iterator
 from typing import Any
 
-from ..config import settings
-from ..services.deepseek import DeepSeekAPIError, call_deepseek, stream_deepseek
+from ..services.llm import LLMError, complete, is_configured, stream
+from .context import render_history, render_notes, topic_cn
 from .models import BirthInfo, ChatState, Topic
 
 
@@ -20,7 +20,7 @@ _FIELD_CN = {
 
 def build_missing_info_reply(topic: Topic | None, birth_info: BirthInfo) -> tuple[str, ChatState]:
     missing = birth_info.complete_missing_fields()
-    topic_text = _topic_cn(topic)
+    topic_text = topic_cn(topic)
     if len(missing) >= 3:
         reply = (
             f"可以，我先按{topic_text}方向帮你看。为了分析，需要确认四个信息："
@@ -68,66 +68,6 @@ def build_out_of_scope_reply() -> tuple[str, ChatState]:
     )
 
 
-def build_consultation_reply(
-    topic: Topic | None,
-    tool_result: dict[str, Any],
-    *,
-    source_basis: dict[str, Any],
-    clarify_previous: bool = False,
-    user_message: str = "",
-    history: list[dict[str, Any]] | None = None,
-) -> tuple[str, ChatState, dict[str, Any]]:
-    actual_topic = topic or "personality"
-    chart = tool_result["chart"]
-    diagnosis = tool_result["diagnosis"]
-    arbitration = tool_result["arbitration"]
-    context = _context_from_tool_result(chart, diagnosis, arbitration, source_basis)
-
-    followups = _followups(actual_topic, history)
-    prompt = _build_reply_prompt(
-        actual_topic,
-        context,
-        clarify_previous=clarify_previous,
-        followups=followups,
-        user_message=user_message,
-        history=history,
-    )
-    llm_result = _call_reply_llm(prompt)
-    if llm_result is not None:
-        reply = llm_result["reply"]
-        if llm_result.get("suggested_followups"):
-            followups = [str(item) for item in llm_result["suggested_followups"][:3]]
-    else:
-        if clarify_previous:
-            reply = _clarify_reply(context)
-        elif actual_topic == "career":
-            reply = _career_reply(context)
-        elif actual_topic == "relationship":
-            reply = _relationship_reply(context)
-        elif actual_topic == "wealth":
-            reply = _wealth_reply(context)
-        else:
-            reply = _personality_reply(context)
-        if followups:
-            reply += "\n\n你可以继续问：" + " / ".join(followups)
-
-    state = ChatState(
-        topic=actual_topic,
-        needs_more_info=False,
-        missing_fields=[],
-        suggested_followups=followups,
-    )
-    generation_trace = {
-        "mode": "deepseek" if llm_result is not None else "deterministic_template",
-        "topic": actual_topic,
-        "source_basis": source_basis,
-        "context": context,
-        "reply": reply,
-        "raw_response": llm_result["raw_response"] if llm_result is not None else None,
-    }
-    return reply, state, generation_trace
-
-
 def stream_consultation_reply(
     topic: Topic | None,
     tool_result: dict[str, Any],
@@ -136,6 +76,7 @@ def stream_consultation_reply(
     clarify_previous: bool = False,
     user_message: str = "",
     history: list[dict[str, Any]] | None = None,
+    memory_notes: list[dict[str, Any]] | None = None,
 ) -> Iterator[tuple[str, ChatState | None, dict[str, Any] | None]]:
     """Stream the consultation reply chunk by chunk.
 
@@ -150,7 +91,7 @@ def stream_consultation_reply(
     arbitration = tool_result["arbitration"]
     context = _context_from_tool_result(chart, diagnosis, arbitration, source_basis)
 
-    if not settings.deepseek_api_key:
+    if not is_configured():
         if clarify_previous:
             reply = _clarify_reply(context)
         elif actual_topic == "career":
@@ -170,14 +111,15 @@ def stream_consultation_reply(
     prompt = _build_stream_reply_prompt(actual_topic, context,
                                          clarify_previous=clarify_previous,
                                          user_message=user_message,
-                                         history=history)
+                                         history=history,
+                                         memory_notes=memory_notes)
     collected = []
     try:
-        for chunk in stream_deepseek(prompt["system_prompt"], prompt["user_prompt"],
+        for chunk in stream(prompt["system_prompt"], prompt["user_prompt"],
                                       temperature=0.7):
             collected.append(chunk)
             yield chunk, None, None
-    except DeepSeekAPIError:
+    except LLMError:
         # fallback to template on stream error
         if clarify_previous:
             reply = _clarify_reply(context)
@@ -191,13 +133,13 @@ def stream_consultation_reply(
         return
 
     full_reply = "".join(collected)
-    followups = generate_followups(actual_topic, context, history, full_reply,
-                                   user_message=user_message)
+    reflection = reflect_on_reply(actual_topic, history, full_reply, user_message=user_message)
+    followups = reflection["followups"]
     state = ChatState(topic=actual_topic, needs_more_info=False,
                      missing_fields=[], suggested_followups=followups)
     generation_trace = {"mode": "deepseek_stream", "topic": actual_topic,
                         "reply": full_reply, "raw_response": full_reply,
-                        "followups": followups}
+                        "followups": followups, "conclusion": reflection["conclusion"]}
     yield "", state, generation_trace
 
 
@@ -351,78 +293,59 @@ def _followups(
     return rotated[:count]
 
 
-def generate_followups(
+def reflect_on_reply(
     topic: Topic | None,
-    context: dict[str, Any],
     history: list[dict[str, Any]] | None,
     reply: str,
     *,
     user_message: str = "",
     count: int = 3,
-) -> list[str]:
-    """LLM-generated follow-ups grounded in the current Q&A + session history.
+) -> dict[str, Any]:
+    """One LLM call after the reply: dynamic follow-ups + a one-line conclusion.
 
-    Falls back to the history-aware pool when no LLM is configured or on error.
+    Returns {"followups": [...], "conclusion": "..."}. Follow-ups fall back to
+    the history-aware pool; conclusion falls back to "" when no LLM / on error.
     """
-    fallback = _followups(topic, history, count=count)
-    if not settings.deepseek_api_key:
-        return fallback
+    result: dict[str, Any] = {
+        "followups": _followups(topic, history, count=count),
+        "conclusion": "",
+    }
+    if not is_configured():
+        return result
 
     system_prompt = (
-        "用户刚问了一个命理咨询问题并得到了回答。请基于这段对话，"
-        f"提出用户接下来最可能继续问的 {count} 个问题。严格遵守：\n"
-        "1. 必须是「下一步」的问题：在回答基础上深入某一点，或转向相关但全新的角度；\n"
-        "2. 绝对不要复述或改写「当前问题」，也不要与「已经问过的」重复或近义；\n"
-        "3. 要与「回答」的建议方向一致，不要建议回答里明确不推荐的做法；\n"
-        "4. 用日常口语，不要出现命理术语、古籍或流派名（如偏财格、财星救应、用神这类都不要）；\n"
-        "5. 每个不超过15字，具体、彼此不同，不要序号或引号前缀；\n"
-        '6. 只输出 JSON 字符串数组，例如 ["问题一","问题二"]。'
+        "用户刚问了一个命理咨询问题并得到了回答。基于这段对话，输出严格 JSON，包含两个字段：\n"
+        f"1. followups：用户接下来最可能继续问的 {count} 个问题（字符串数组）。"
+        "必须是下一步的问题、不复述「当前问题」、不与「已经问过的」重复、与回答方向一致、"
+        "用日常口语不带命理术语，每个不超过15字。\n"
+        "2. conclusion：一句话（不超过40字）概括这次给用户的核心结论，"
+        "供以后回访时参考，口语化、具体、不带术语。\n"
+        '形如 {"followups":["问题一","问题二"],"conclusion":"……"}。只输出 JSON。'
     )
     user_prompt = json.dumps(
         {
             "topic": topic,
             "当前问题": user_message,
             "回答": reply,
-            "近期对话": _render_history(history),
+            "近期对话": render_history(history),
             "已经问过的": sorted(_asked_questions(history)),
         },
         ensure_ascii=False,
     )
     try:
-        raw = call_deepseek(system_prompt, user_prompt, temperature=0.6)
-        data = json.loads(raw)
+        data = json.loads(complete(system_prompt, user_prompt, temperature=0.6))
         if isinstance(data, dict):
-            data = next((v for v in data.values() if isinstance(v, list)), [])
-        items = [str(x).strip() for x in data if str(x).strip()]
-        return items[:count] or fallback
-    except (DeepSeekAPIError, ValueError, TypeError, KeyError, json.JSONDecodeError):
-        return fallback
-
-
-def _topic_cn(topic: Topic | None) -> str:
-    return {
-        "career": "事业",
-        "relationship": "感情",
-        "wealth": "财务",
-        "personality": "性格",
-    }.get(topic or "career", "这个问题")
-
-
-def _render_history(history: list[dict[str, Any]] | None, *, max_turns: int = 4) -> str:
-    """Compact transcript of the most recent turns for follow-up context."""
-    if not history:
-        return ""
-    role_cn = {"user": "用户", "assistant": "助手"}
-    lines: list[str] = []
-    for msg in history[-max_turns:]:
-        content = str(msg.get("content", "")).strip()
-        if not content:
-            continue
-        if len(content) > 180:
-            content = content[:180] + "…"
-        role = role_cn.get(str(msg.get("role")), str(msg.get("role")))
-        lines.append(f"{role}：{content}")
-    return "\n".join(lines)
+            fups = data.get("followups")
+            if isinstance(fups, list):
+                items = [str(x).strip() for x in fups if str(x).strip()][:count]
+                if items:
+                    result["followups"] = items
+            conclusion = data.get("conclusion")
+            if isinstance(conclusion, str) and conclusion.strip():
+                result["conclusion"] = conclusion.strip()
+    except (LLMError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        pass
+    return result
 
 
 def _build_analysis_block(topic: Topic, context: dict[str, Any], *, clarify_previous: bool) -> dict[str, Any]:
@@ -447,12 +370,14 @@ def _build_stream_reply_prompt(
     clarify_previous: bool,
     user_message: str = "",
     history: list[dict[str, Any]] | None = None,
+    memory_notes: list[dict[str, Any]] | None = None,
 ) -> dict[str, str]:
     """Streaming (non-JSON) prompt that answers the user's current question."""
     system_prompt = (
         "你是一位谨慎、专业的命理咨询助手。"
         "请直接、充分地回答「用户当前的问题」，回答必须基于下方结构化分析结果，"
         "不要编造超出分析结论的内容，也不要重复之前已经说过的话。"
+        "若有「过往咨询记录」，自然地保持一致、可适当呼应，但不要照搬复述。"
         "不要提及具体流派名、古籍或后台规则，也不要堆砌命理术语。"
         "用日常语言展开，依次涵盖：直接结论、适配的条件或方向、需要注意的风险、一条可执行的建议。"
         "篇幅约300–500字，分2–4个自然段，语气沉稳克制。不要在结尾附上追问建议。"
@@ -463,71 +388,15 @@ def _build_stream_reply_prompt(
         "## 结构化分析结果",
         json.dumps(analysis_block, ensure_ascii=False, indent=2),
     ]
-    transcript = _render_history(history)
+    notes = render_notes(memory_notes, topic)
+    if notes:
+        parts.append("## 过往咨询记录（这位用户之前聊过的结论）")
+        parts.append(notes)
+    transcript = render_history(history)
     if transcript:
         parts.append("## 最近的对话")
         parts.append(transcript)
     parts.append("## 用户当前的问题")
-    parts.append(user_message.strip() or f"请就「{_topic_cn(topic)}」方向给我分析。")
+    parts.append(user_message.strip() or f"请就「{topic_cn(topic)}」方向给我分析。")
 
     return {"system_prompt": system_prompt, "user_prompt": "\n\n".join(parts)}
-
-
-def _build_reply_prompt(
-    topic: Topic,
-    context: dict[str, Any],
-    *,
-    clarify_previous: bool,
-    followups: list[str],
-    user_message: str = "",
-    history: list[dict[str, Any]] | None = None,
-) -> dict[str, str]:
-    system_prompt = (
-        "你是一位谨慎、专业、简洁的命理咨询助手。"
-        "请直接回答 user_question，回答必须基于结构化分析结果，"
-        "不要编造超出证据的结论，也不要重复 recent_dialog 里已经说过的话。"
-        "用户回复中不要出现具体流派名、古籍书名或后台规则来源。"
-        "输出必须是严格 JSON，不要输出任何额外文本。"
-    )
-    user_payload = {
-        "topic": topic,
-        "clarify_previous": clarify_previous,
-        "user_question": user_message.strip(),
-        "recent_dialog": _render_history(history),
-        "analysis": _build_analysis_block(topic, context, clarify_previous=clarify_previous),
-        "response_policy": {
-            "tone": "consultation",
-            "avoid_raw_rule_dumps": True,
-            "mention_technical_terms_sparingly": True,
-            "focus": "answer user_question with user-facing advice",
-        },
-        "required_fields": ["reply", "suggested_followups"],
-        "followup_candidates": followups,
-    }
-    user_prompt = json.dumps(user_payload, ensure_ascii=False, indent=2)
-    return {"system_prompt": system_prompt, "user_prompt": user_prompt}
-
-
-def _call_reply_llm(prompt: dict[str, str]) -> dict[str, Any] | None:
-    if not settings.deepseek_api_key:
-        return None
-    try:
-        raw = call_deepseek(
-            prompt["system_prompt"],
-            prompt["user_prompt"],
-            temperature=0.2,
-        )
-        data = json.loads(raw)
-        reply = str(data["reply"]).strip()
-        if not reply:
-            raise ValueError("empty reply")
-        suggested_followups = data.get("suggested_followups", [])
-        if not isinstance(suggested_followups, list):
-            suggested_followups = []
-        return {
-            "reply": reply,
-            "suggested_followups": suggested_followups,
-            "raw_response": raw,
-        }
-    except (DeepSeekAPIError, ValueError, KeyError, TypeError, json.JSONDecodeError):
-        return None

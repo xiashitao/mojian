@@ -14,7 +14,7 @@ from bazibase.arbitration import (
 
 from ..schemas import ArbitrateRequest
 from ..services.enrich import enrich_chart
-from ..services.deepseek import call_deepseek, DeepSeekAPIError
+from ..services.llm import complete, LLMError
 
 router = APIRouter()
 
@@ -64,11 +64,11 @@ def run_arbitration(req: ArbitrateRequest):
     for prompt in result.prompts:
         case = prompt.case
         try:
-            raw = call_deepseek(
+            raw = complete(
                 system_prompt=prompt.system_prompt,
                 user_prompt=prompt.user_prompt,
             )
-        except DeepSeekAPIError as e:
+        except LLMError as e:
             errors[case.case_id] = str(e)
             continue
 
@@ -82,12 +82,12 @@ def run_arbitration(req: ArbitrateRequest):
                     f"上次回复片段: {raw[:200]}\n\n"
                     f"请重新回答以下问题，必须输出严格 JSON：\n\n{prompt.user_prompt}"
                 )
-                raw2 = call_deepseek(
+                raw2 = complete(
                     system_prompt=prompt.system_prompt,
                     user_prompt=retry_prompt,
                 )
                 response = parse_arbitration_response(case, raw2)
-            except (ArbitrationParseError, DeepSeekAPIError) as e2:
+            except (ArbitrationParseError, LLMError) as e2:
                 errors[case.case_id] = f"Parse failed: {e2}"
                 continue
 

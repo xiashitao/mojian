@@ -6,6 +6,7 @@ anonymous client id. Lets a returning user skip re-entering their birth info.
 from __future__ import annotations
 
 import json
+import uuid
 
 from ..database import get_db
 from .models import BirthInfo
@@ -36,7 +37,7 @@ def save_birth_info(memory_key: str | None, birth_info: BirthInfo) -> None:
     """Persist the user's birth info (only when it's complete)."""
     if not memory_key or not birth_info.is_complete():
         return
-    payload = json.dumps(birth_info.dict(), ensure_ascii=False)
+    payload = json.dumps(birth_info.model_dump(), ensure_ascii=False)
     conn = get_db()
     try:
         conn.execute(
@@ -52,13 +53,58 @@ def save_birth_info(memory_key: str | None, birth_info: BirthInfo) -> None:
         conn.close()
 
 
+def add_note(
+    memory_key: str | None,
+    *,
+    topic: str | None,
+    question: str,
+    conclusion: str,
+    analysis_id: str | None = None,
+) -> None:
+    """Append a one-line record of a past consultation (topic + conclusion)."""
+    if not memory_key or not conclusion.strip():
+        return
+    conn = get_db()
+    try:
+        conn.execute(
+            """INSERT INTO user_memory_notes
+                   (id, memory_key, topic, question, conclusion, analysis_id)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (uuid.uuid4().hex, memory_key, topic, question[:200],
+             conclusion.strip()[:300], analysis_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def recent_notes(memory_key: str | None, limit: int = 5) -> list[dict]:
+    """Most recent consultation notes for this user (newest first)."""
+    if not memory_key:
+        return []
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """SELECT topic, question, conclusion, analysis_id, created_at
+               FROM user_memory_notes
+               WHERE memory_key = ?
+               ORDER BY created_at DESC, rowid DESC
+               LIMIT ?""",
+            (memory_key, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def clear(memory_key: str | None) -> None:
-    """Forget everything remembered for this user."""
+    """Forget everything remembered for this user (birth info + notes)."""
     if not memory_key:
         return
     conn = get_db()
     try:
         conn.execute("DELETE FROM user_memory WHERE memory_key = ?", (memory_key,))
+        conn.execute("DELETE FROM user_memory_notes WHERE memory_key = ?", (memory_key,))
         conn.commit()
     finally:
         conn.close()

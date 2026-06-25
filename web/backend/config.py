@@ -8,9 +8,16 @@ WEB_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
+    # Default LLM provider (DeepSeek). Any OpenAI-compatible service works by
+    # overriding the llm_* fields below — no code change needed.
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_model: str = "deepseek-chat"
+
+    # Provider-agnostic gateway overrides; empty -> fall back to deepseek_*.
+    llm_base_url: str = ""
+    llm_api_key: str = ""
+    llm_model: str = ""
 
     database_path: str = "charts.db"
 
