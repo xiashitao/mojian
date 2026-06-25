@@ -2,16 +2,13 @@
 from web.backend.agent import extractor
 
 
-def test_extract_time_branch_hours():
-    assert extractor._extract_time("辰时") == "07:30"
-    assert extractor._extract_time("子时出生") == "23:30"
-    assert extractor._extract_time("午时") == "11:30"
-    assert extractor._extract_time("亥时") == "21:30"
-
-
-def test_extract_time_xiawu_is_not_parsed_as_wu_branch():
-    # "下午" must not be misread as 午时 (午 not followed by 时).
-    assert extractor._extract_time("下午三点") == "15:00"
+def test_extract_time_ignores_branch_hours():
+    # Product decision: only concrete clock times are accepted; 地支时辰
+    # (子时/辰时/…) are NOT converted — the agent must ask for the exact time.
+    assert extractor._extract_time("辰时") is None
+    assert extractor._extract_time("子时出生") is None
+    assert extractor._extract_time("午时") is None
+    assert extractor._extract_time("亥时") is None
 
 
 def test_extract_time_digits_and_rough():
