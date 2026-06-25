@@ -84,15 +84,37 @@
   color: var(--bone-100);
 }
 
-.bazi-col.is-day .bazi-col__stem {
-  color: var(--cinnabar);
+/* 五行 colors for 天干/地支 (override the base text color) */
+.el-wood { color: var(--el-wood); }
+.el-fire { color: var(--el-fire); }
+.el-earth { color: var(--el-earth); }
+.el-metal { color: var(--el-metal); }
+.el-water { color: var(--el-water); }
+
+.hidden-stem__role {
+  font-style: normal;
+  color: var(--bone-500);
+  margin: 0 1px;
 }
 
 .bazi-col__hidden {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.hidden-stem {
   font-family: var(--font-cn);
-  font-size: 10px;
-  color: var(--bone-400);
-  letter-spacing: 0.06em;
+  font-size: 9px;
+  color: var(--bone-500);
+  letter-spacing: 0.02em;
+}
+
+.hidden-stem b {
+  color: var(--bone-300);
+  font-weight: 500;
+  margin-right: 1px;
 }
 
 .bazi-col__nayin {
@@ -186,8 +208,13 @@
   color: var(--bone-400);
 }
 
-.chart-card__export {
+.chart-card__actions {
+  display: flex;
+  gap: 8px;
   margin-top: 8px;
+}
+
+.chart-card__btn {
   padding: 5px 14px;
   background: transparent;
   border: 1px solid var(--rule-line-bright);
@@ -199,12 +226,241 @@
   transition: color 0.15s, border-color 0.15s;
 }
 
-.chart-card__export:hover:not(:disabled) {
+.chart-card__btn:hover:not(:disabled) {
   color: var(--cinnabar);
   border-color: var(--cinnabar);
 }
 
-.chart-card__export:disabled {
+.chart-card__btn:disabled {
   opacity: 0.5;
   cursor: wait;
+}
+
+/* ── Full-chart detail modal ── */
+.detail-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 20px;
+}
+
+.detail-modal {
+  width: 100%;
+  max-width: 680px;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ink-900);
+  border: 1px solid var(--rule-line-bright);
+  border-radius: 16px;
+}
+
+.detail-modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--rule-line);
+}
+
+.detail-modal__title {
+  font-family: var(--font-brand);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--bone-100);
+  letter-spacing: 0.08em;
+}
+
+.detail-modal__close {
+  background: transparent;
+  border: none;
+  color: var(--bone-400);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.detail-modal__close:hover {
+  color: var(--cinnabar);
+}
+
+.detail-modal__body {
+  overflow-y: auto;
+  padding: 18px 20px;
+}
+
+.detail-section + .detail-section {
+  margin-top: 22px;
+}
+
+.detail-section__h {
+  margin: 0 0 12px;
+  font-family: var(--font-cn);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--bone-200);
+  letter-spacing: 0.06em;
+}
+
+/* 八字 */
+.detail-bazi {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.detail-pillar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 6px;
+  border: 1px solid var(--rule-line);
+  border-radius: 10px;
+  background: var(--ink-950);
+}
+
+.detail-pillar.is-day {
+  border-color: var(--cinnabar-wash);
+  background: var(--cinnabar-soft);
+}
+
+.detail-pillar__label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--bone-500);
+}
+
+.detail-pillar__god {
+  font-family: var(--font-cn);
+  font-size: 11px;
+  color: var(--bone-400);
+}
+
+.detail-pillar__gz {
+  font-family: var(--font-brand);
+  font-size: 26px;
+  line-height: 1.05;
+  color: var(--bone-100);
+}
+
+.detail-pillar__hidden {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  margin-top: 2px;
+}
+
+.detail-pillar__nayin {
+  font-family: var(--font-cn);
+  font-size: 10px;
+  color: var(--bone-500);
+}
+
+/* 大运 + 流年 */
+.detail-luck {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dayun {
+  border: 1px solid var(--rule-line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.dayun.is-current {
+  border-color: var(--cinnabar);
+  background: var(--cinnabar-soft);
+}
+
+.dayun__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.dayun__gz {
+  font-family: var(--font-brand);
+  font-size: 18px;
+  color: var(--bone-100);
+}
+
+.dayun.is-current .dayun__gz {
+  color: var(--cinnabar);
+}
+
+.dayun__meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--bone-500);
+}
+
+.dayun__god {
+  font-family: var(--font-cn);
+  font-size: 11px;
+  color: var(--bone-400);
+  margin-left: auto;
+}
+
+.dayun__years {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+}
+
+.liunian-cell__tg {
+  font-family: var(--font-cn);
+  font-size: 8px;
+  color: var(--bone-500);
+  letter-spacing: -0.02em;
+  text-align: center;
+}
+
+.liunian-cell.is-now .liunian-cell__tg {
+  color: var(--cinnabar);
+}
+
+.liunian-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 2px;
+  border: 1px solid var(--rule-line);
+  border-radius: 6px;
+}
+
+.liunian-cell.is-now {
+  border-color: var(--cinnabar);
+  background: var(--cinnabar-wash);
+}
+
+.liunian-cell__y {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--bone-500);
+}
+
+.liunian-cell__gz {
+  font-family: var(--font-brand);
+  font-size: 14px;
+  color: var(--bone-200);
+}
+
+.liunian-cell.is-now .liunian-cell__gz {
+  color: var(--cinnabar);
+}
+
+@media (max-width: 560px) {
+  .dayun__years {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }

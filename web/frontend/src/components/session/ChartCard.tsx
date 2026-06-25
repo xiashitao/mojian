@@ -1,6 +1,9 @@
 import { useRef, useState } from "react";
 import { toPng } from "html-to-image";
 import type { ChartData } from "../../types/session";
+import { elementClass } from "../../utils/ganzhi";
+import { ChartDetailModal } from "./ChartDetailModal";
+import { Ganzhi } from "./Ganzhi";
 
 function genderCn(gender: string | null): string {
   if (gender === "male") return "男";
@@ -12,6 +15,7 @@ function genderCn(gender: string | null): string {
 export function ChartCard({ chart }: { chart: ChartData }) {
   const captureRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
   const current = chart.current;
 
   const handleExport = async () => {
@@ -61,9 +65,21 @@ export function ChartCard({ chart }: { chart: ChartData }) {
             >
               <span className="bazi-col__label">{p.label}</span>
               <span className="bazi-col__god">{p.stem_ten_god ?? "—"}</span>
-              <span className="bazi-col__stem">{p.stem}</span>
-              <span className="bazi-col__branch">{p.branch}</span>
-              <span className="bazi-col__hidden">{p.hidden.join(" ")}</span>
+              <span className={`bazi-col__stem ${elementClass(p.stem)}`}>
+                {p.stem}
+              </span>
+              <span className={`bazi-col__branch ${elementClass(p.branch)}`}>
+                {p.branch}
+              </span>
+              <span className="bazi-col__hidden">
+                {p.hidden.map((h) => (
+                  <span key={h.char} className="hidden-stem">
+                    <b className={elementClass(h.char)}>{h.char}</b>
+                    {h.role && <i className="hidden-stem__role">{h.role[0]}</i>}
+                    {h.ten_god ?? ""}
+                  </span>
+                ))}
+              </span>
               <span className="bazi-col__nayin">{p.nayin}</span>
             </div>
           ))}
@@ -81,7 +97,9 @@ export function ChartCard({ chart }: { chart: ChartData }) {
                   current && i + 1 === current.luck_index ? "is-current" : ""
                 }`}
               >
-                <span className="luck-step__gz">{lp.stem_branch}</span>
+                <span className="luck-step__gz">
+                  <Ganzhi gz={lp.stem_branch} />
+                </span>
                 <span className="luck-step__year">{lp.start_year}</span>
                 <span className="luck-step__age">{lp.start_age}岁</span>
               </div>
@@ -92,7 +110,9 @@ export function ChartCard({ chart }: { chart: ChartData }) {
         {current && (
           <div className="liunian">
             <span className="liunian__label">流年</span>
-            <span className="liunian__gz">{current.liunian}</span>
+            <span className="liunian__gz">
+              <Ganzhi gz={current.liunian} />
+            </span>
             <span className="liunian__meta">
               {current.year}年 · {current.nominal_age}岁
               {current.liunian_stem_ten_god
@@ -103,14 +123,27 @@ export function ChartCard({ chart }: { chart: ChartData }) {
         )}
       </div>
 
-      <button
-        type="button"
-        className="chart-card__export"
-        onClick={() => void handleExport()}
-        disabled={exporting}
-      >
-        {exporting ? "导出中…" : "导出命盘图"}
-      </button>
+      <div className="chart-card__actions">
+        <button
+          type="button"
+          className="chart-card__btn"
+          onClick={() => setDetailOpen(true)}
+        >
+          查看专业细盘
+        </button>
+        <button
+          type="button"
+          className="chart-card__btn"
+          onClick={() => void handleExport()}
+          disabled={exporting}
+        >
+          {exporting ? "导出中…" : "导出命盘图"}
+        </button>
+      </div>
+
+      {detailOpen && (
+        <ChartDetailModal chart={chart} onClose={() => setDetailOpen(false)} />
+      )}
     </div>
   );
 }

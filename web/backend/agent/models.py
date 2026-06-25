@@ -68,6 +68,8 @@ class ConversationState(BaseModel):
     birth_info: BirthInfo = Field(default_factory=BirthInfo)
     current_topic: Topic | None = None
     last_analysis_id: str | None = None
+    # Birth key the chart card was already shown for (so it's not repeated).
+    chart_shown_for: str | None = None
     source_basis: dict[str, Any] = Field(default_factory=lambda: {
         "primary_source": "子平真诠",
         "secondary_sources": ["滴天髓"],

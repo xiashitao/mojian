@@ -126,6 +126,7 @@ export interface ConversationMessage {
   content: string;
   analysis_id: string | null;
   created_at: string;
+  metadata_json?: string;
 }
 
 export interface ConversationDetail {

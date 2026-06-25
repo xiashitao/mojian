@@ -27,6 +27,7 @@ def build_chart_card(chart: dict[str, Any], birth_info: BirthInfo) -> dict[str, 
             "start_year": lp.get("start_year"),
             "end_year": lp.get("end_year"),
             "start_age": lp.get("start_age"),
+            "end_age": lp.get("end_age"),
             "stem_ten_god": lp.get("stem_ten_god"),
             "branch_ten_god": lp.get("branch_ten_god"),
         }
@@ -72,6 +73,9 @@ def _pillar(pillar: dict[str, Any]) -> dict[str, Any]:
         "stem_ten_god": stem.get("ten_god"),
         "branch": branch.get("char"),
         "branch_ten_god": branch.get("ten_god"),
-        "hidden": [h.get("char") for h in branch.get("hidden_stems", [])],
+        "hidden": [
+            {"char": h.get("char"), "ten_god": h.get("ten_god"), "role": h.get("role")}
+            for h in branch.get("hidden_stems", [])
+        ],
         "nayin": pillar.get("nayin"),
     }

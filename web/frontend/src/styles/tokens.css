@@ -20,11 +20,12 @@
   --accent-amber: #f59e0b;
   --accent-green: #10b981;
   --accent-red: #ef4444;
-  --el-wood: #4ade80;
-  --el-fire: #f87171;
-  --el-earth: #facc15;
-  --el-metal: #cbd5e1;
-  --el-water: #60a5fa;
+  /* 五行 — muted, warm-leaning palette tuned to the ink/bone/bronze system */
+  --el-wood: #7f9e78;
+  --el-fire: #cf6a52;
+  --el-earth: #bf9a63;
+  --el-metal: #d8c48d;
+  --el-water: #6f95aa;
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-cn: 'Inter', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-brand: 'Noto Serif SC', 'Songti SC', serif;
@@ -52,11 +53,12 @@
   --accent-amber: #d97706;
   --accent-green: #059669;
   --accent-red: #dc2626;
-  --el-wood: #15803d;
-  --el-fire: #b91c1c;
-  --el-earth: #a16207;
-  --el-metal: #475569;
-  --el-water: #1d4ed8;
+  /* 五行 — light theme: deeper, desaturated; fire stays a muted brick (素 rule) */
+  --el-wood: #4f6e52;
+  --el-fire: #a5543f;
+  --el-earth: #8a6a40;
+  --el-metal: #897137;
+  --el-water: #3e6276;
   --btn-primary-text: #ffffff;
 }
 

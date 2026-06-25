@@ -2,13 +2,19 @@ export type MessageRole = "user" | "assistant" | "system";
 
 export type MessageFeedback = "like" | "dislike";
 
+export type HiddenStem = {
+  char: string;
+  ten_god: string | null;
+  role: string | null;
+};
+
 export type ChartPillar = {
   label: string;
   stem: string;
   stem_ten_god: string | null;
   branch: string;
   branch_ten_god: string | null;
-  hidden: string[];
+  hidden: HiddenStem[];
   nayin: string | null;
 };
 
@@ -17,6 +23,7 @@ export type ChartLuckPillar = {
   start_year: number;
   end_year: number;
   start_age: number;
+  end_age: number;
   stem_ten_god?: string;
   branch_ten_god?: string;
 };

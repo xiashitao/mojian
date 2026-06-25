@@ -57,6 +57,7 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
     assistant_message_id: str | None = None
     reply_parts: list[str] = []
     chat_state = ChatState(topic=None, needs_more_info=False, missing_fields=[], suggested_followups=[])
+    chart_card_payload: dict[str, Any] | None = None
 
     try:
         state = _load_state(conv_id)
@@ -125,11 +126,21 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
                                 f"Resolved: {arb_summary['resolved']}, "
                                 f"Unresolved: {arb_summary['unresolved']}."))
 
-            # Emit the chart card first, before the text analysis streams.
-            yield json.dumps(
-                {"type": "chart", "chart": build_chart_card(tool_result["chart"], merged_birth_info)},
-                ensure_ascii=False,
-            ) + "\n"
+            # Show the chart card once per chart — on the first consult for this
+            # birth, or again only if the birth info changed.
+            birth_key = "|".join(
+                str(v) for v in (
+                    merged_birth_info.birth_date, merged_birth_info.birth_time,
+                    merged_birth_info.longitude, merged_birth_info.gender,
+                )
+            )
+            if state.chart_shown_for != birth_key:
+                chart_card_payload = build_chart_card(tool_result["chart"], merged_birth_info)
+                state.chart_shown_for = birth_key
+                yield json.dumps(
+                    {"type": "chart", "chart": chart_card_payload},
+                    ensure_ascii=False,
+                ) + "\n"
 
             clarify = decision.action == "clarify"
             prior_messages = _prior_messages(conv_id, user_message["id"])
@@ -164,9 +175,12 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
 
         full_reply = "".join(reply_parts)
         repository.update_conversation_state(conv_id, state.model_dump())
+        metadata = chat_state.model_dump()
+        if chart_card_payload:
+            metadata["chart"] = chart_card_payload  # so the card survives reload
         assistant_message = repository.add_message(
             conv_id, "assistant", full_reply,
-            analysis_id=analysis_id, metadata=chat_state.model_dump(),
+            analysis_id=analysis_id, metadata=metadata,
         )
         assistant_message_id = assistant_message["id"]
         tracer.add("persist_state", input_data={}, output_data=state.model_dump(),

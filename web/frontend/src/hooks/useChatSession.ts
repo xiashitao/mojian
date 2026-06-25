@@ -4,9 +4,31 @@ import { sendChatMessage } from "../api/chatApi";
 import { forgetMemory } from "../api/memoryApi";
 import { getConversation } from "../api/conversationApi";
 import type { ChatState, Topic } from "../types/api";
-import type { BirthInfo, MessageFeedback, UiMessage } from "../types/session";
+import type {
+  BirthInfo,
+  ChartData,
+  MessageFeedback,
+  UiMessage,
+} from "../types/session";
 import { useArchiveCollapsed } from "./useArchiveCollapsed";
 import { useConversations } from "./useConversations";
+
+/** Pull persisted chart + follow-ups out of a stored message's metadata. */
+function parseMeta(metadataJson?: string): {
+  chart?: ChartData;
+  followups?: string[];
+} {
+  if (!metadataJson) return {};
+  try {
+    const meta = JSON.parse(metadataJson) as {
+      chart?: ChartData;
+      suggested_followups?: string[];
+    };
+    return { chart: meta.chart, followups: meta.suggested_followups };
+  } catch {
+    return {};
+  }
+}
 
 /** Owns chat-session state and side effects, composed from smaller hooks. */
 export function useChatSession() {
@@ -46,13 +68,18 @@ export function useChatSession() {
       const detail = await getConversation(id);
       setConversationId(id);
       setMessages(
-        detail.messages.map((m) => ({
-          id: m.id,
-          role: m.role as UiMessage["role"],
-          content: m.content,
-          analysis_id: m.analysis_id,
-          created_at: m.created_at,
-        })),
+        detail.messages.map((m) => {
+          const meta = parseMeta(m.metadata_json);
+          return {
+            id: m.id,
+            role: m.role as UiMessage["role"],
+            content: m.content,
+            analysis_id: m.analysis_id,
+            created_at: m.created_at,
+            chart: meta.chart,
+            followups: meta.followups,
+          };
+        }),
       );
       const state = (detail.state ?? {}) as Record<string, unknown>;
       setBirthInfo((state.birth_info ?? null) as BirthInfo | null);
