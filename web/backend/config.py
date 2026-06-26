@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = ""
 
+    # Cheap/fast tier for mechanical tasks (routing extraction, follow-up
+    # questions). Empty -> falls back to deepseek_*, then to the main provider.
+    fast_llm_base_url: str = ""
+    fast_llm_api_key: str = ""
+    fast_llm_model: str = ""
+
     database_path: str = "charts.db"
 
     jwt_secret: str = secrets.token_hex(32)

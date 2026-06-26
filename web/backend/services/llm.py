@@ -42,13 +42,29 @@ class Provider:
 
 
 def active_provider() -> Provider:
-    """The configured provider; defaults to DeepSeek when llm_* are unset."""
+    """The main/deep provider — consultation reply & arbitration.
+    Defaults to DeepSeek when llm_* are unset."""
     return Provider(
         name="llm",
         base_url=settings.llm_base_url or settings.deepseek_base_url,
         api_key=settings.llm_api_key or settings.deepseek_api_key,
         model=settings.llm_model or settings.deepseek_model,
     )
+
+
+def fast_provider() -> Provider:
+    """The cheap/fast provider — mechanical tasks (routing extraction, follow-up
+    questions). Uses FAST_LLM_* if set, else DeepSeek (so a Gemini main + a
+    DeepSeek key in env yields a cheap tier for free), else the main provider."""
+    key = settings.fast_llm_api_key or settings.deepseek_api_key
+    if key:
+        return Provider(
+            name="fast",
+            base_url=settings.fast_llm_base_url or settings.deepseek_base_url,
+            api_key=key,
+            model=settings.fast_llm_model or settings.deepseek_model,
+        )
+    return active_provider()
 
 
 def is_configured() -> bool:

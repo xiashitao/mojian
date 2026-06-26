@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import re
 
-from ..services.llm import LLMError, complete, is_configured
+from ..services.llm import LLMError, complete, fast_provider, is_configured
 from .models import BirthInfo, ExtractionResult, Intent, Topic
 
 
@@ -141,6 +141,7 @@ def _extract_with_llm(text: str) -> ExtractionResult | None:
             _EXTRACT_SYSTEM_PROMPT,
             text,
             temperature=0.0,
+            provider=fast_provider(),  # mechanical routing → cheap model
         )
         data = json.loads(raw)
     except (LLMError, json.JSONDecodeError, ValueError):

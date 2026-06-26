@@ -9,7 +9,7 @@ from typing import Any
 from bazibase.constants import ELEMENT_CONQUEST, ELEMENT_PRODUCTION
 from bazibase.rules.fortune import ROLE_PLAIN
 
-from ..services.llm import LLMError, complete, is_configured, stream
+from ..services.llm import LLMError, complete, fast_provider, is_configured, stream
 from .context import render_history, render_notes, topic_cn
 from .models import BirthInfo, ChatState, Topic
 
@@ -479,7 +479,8 @@ def reflect_on_reply(
         ensure_ascii=False,
     )
     try:
-        data = json.loads(complete(system_prompt, user_prompt, temperature=0.6))
+        data = json.loads(complete(system_prompt, user_prompt, temperature=0.6,
+                                   provider=fast_provider()))  # follow-ups → cheap model
         if isinstance(data, dict):
             fups = data.get("followups")
             if isinstance(fups, list):
