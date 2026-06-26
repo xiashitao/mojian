@@ -147,6 +147,7 @@ def stream_consultation_reply(
     diagnosis = tool_result["diagnosis"]
     arbitration = tool_result["arbitration"]
     context = _context_from_tool_result(chart, diagnosis, arbitration, source_basis)
+    context["timeline"] = tool_result.get("timeline")
 
     if not is_configured():
         if clarify_previous:
@@ -557,6 +558,9 @@ def _build_analysis_block(topic: Topic, context: dict[str, Any], *, clarify_prev
     natal = context.get("natal_interactions")
     if natal:
         block["命局刑冲合会"] = natal
+    timeline = context.get("timeline")
+    if timeline:
+        block["关键年份·流年透视"] = timeline
     current_period = _summarize_current_period(context.get("current_period"))
     if current_period is not None:
         block["current_period"] = current_period
@@ -625,6 +629,9 @@ def _build_stream_reply_prompt(
         "与这个问题相关的那个十神（印→比劫→食伤→财→官），哪一环接不上就是命局关键；"
         "（三）结合「大运走向」整条谈人生阶段，而不是只看当前一步；遇到与人生时段相关"
         "的问题（如学历，对应求学到各级升学考的那几步运、那几年），就落到相应时段来分析。"
+        "「关键年份·流年透视」给了若干关键年份（升学考节点 + 近未来）当年的流年、所在"
+        "大运、以及它们对命局的作用；谈到这些年份/节点时直接引用它，准确说出是哪一年、"
+        "那年大致顺不顺，不要自己推算年份或干支。"
         # Grounding: the engine's numbers are authoritative — the model may cite
         # them but must never recompute or convert them (the 虚岁→周岁 bug).
         "涉及年龄、年份或任何具体数字时，只能直接引用「结构化分析结果」里给定的数值，"

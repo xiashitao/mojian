@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any
 
 from bazibase import cast_chart, diagnose, assess_pillar_facts
+from bazibase.pillars import _make_pillar
 from bazibase.arbitration import (
     ArbitrationParseError,
     ArbitrationResponse,
@@ -74,6 +75,52 @@ def run_bazibase_tools(
     return result
 
 
+_STEMS = "甲乙丙丁戊己庚辛壬癸"
+_BRANCHES = "子丑寅卯辰巳午未申酉戌亥"
+# 升学考节点（周岁约）：中考~15、高考~18、考研~22。
+_EDU_NODE_AGES = (15, 18, 22)
+_FUTURE_WINDOW = 7  # 近未来若干年的流年透视（覆盖"哪年好转/这几年"类问题）。
+
+
+def _liunian_gz(year: int) -> str:
+    return _STEMS[(year - 4) % 10] + _BRANCHES[(year - 4) % 12]
+
+
+def _timeline_facts(chart, diagnosis, reference_year: int | None) -> list[dict[str, Any]]:
+    """关键年份的流年事实（vs 命局 + 当时所在大运）——升学考节点（过去）+ 近未来
+    窗口。让 LLM 能锚定具体年份（如高考那年）做时段分析，而不必自行换算或猜测。"""
+    dm = chart.day_master
+    yong = diagnosis.yong_shen.ten_god
+    natal = tuple(p.branch for p in chart.four_pillars)
+    birth_year = chart.birth_clock_time.year
+    years = {birth_year + a for a in _EDU_NODE_AGES}
+    if reference_year:
+        years.update(range(reference_year, reference_year + _FUTURE_WINDOW))
+
+    out: list[dict[str, Any]] = []
+    for y in sorted(years):
+        if not (birth_year < y <= birth_year + 120):
+            continue
+        gz = _liunian_gz(y)
+        liunian = _make_pillar(gz[0], gz[1], "luck")
+        lp = next((p for p in chart.luck if p.start_year <= y <= p.end_year), None)
+        facts = assess_pillar_facts(
+            dm, yong, liunian, natal_branches=natal,
+            luck_branch=lp.pillar.branch if lp else None,
+        ).to_dict()
+        out.append({
+            "年份": y,
+            "虚岁": y - birth_year + 1,
+            "流年": gz,
+            "所在大运": lp.pillar.stem_branch if lp else "未起运",
+            "天干": f"{facts['stem']['ten_god']}/{facts['stem']['role']}",
+            "地支": (f"{facts['branch']['ten_god']}/{facts['branch']['role']}"
+                     if facts.get("branch") else None),
+            "关系": facts.get("relations", []),
+        })
+    return out
+
+
 def _compute_bazibase_tools(
     birth_info: BirthInfo,
     reference_year: int | None = None,
@@ -100,6 +147,7 @@ def _compute_bazibase_tools(
         "diagnosis": diagnosis.to_dict(),
         "diagnosis_summary": diagnosis.summary(),
         "arbitration": _arbitration_to_dict(arbitration),
+        "timeline": _timeline_facts(chart, diagnosis, reference_year),
     }
 
 
