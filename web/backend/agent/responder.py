@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from bazibase.constants import ELEMENT_CONQUEST, ELEMENT_PRODUCTION
+from bazibase.rules.fortune import ROLE_PLAIN
 
 from ..services.llm import LLMError, complete, is_configured, stream
 from .context import render_history, render_notes, topic_cn
@@ -526,7 +527,8 @@ def _facts_view(f: dict[str, Any] | None) -> dict[str, Any] | None:
     def role(r: dict[str, Any] | None) -> str | None:
         if not r:
             return None
-        return f"{r.get('char')}（{r.get('ten_god')}·{r.get('role')}）"
+        meaning = ROLE_PLAIN.get(r.get("role"), r.get("role"))
+        return f"{r.get('char')}（{r.get('ten_god')}，{meaning}）"
 
     view: dict[str, Any] = {"干支": f.get("pillar"), "天干": role(f.get("stem"))}
     if f.get("branch"):
@@ -606,6 +608,12 @@ def _build_stream_reply_prompt(
         "讲解以日常语言为主；可以借用核心命理术语（如印、食伤、官杀、财、用神等）"
         "把机理讲透，但每个术语首次出现时要顺带一句大白话解释，让外行也能懂；"
         "不要报出具体干支（如甲子、丙午），也不要堆砌术语、写成排盘报告。"
+        # Don't recite the engine's internal role labels — translate them.
+        "事实里给的角色标签（喜/忌/助用/增凶/平）是后台内部简写，绝不要原样照搬，"
+        "更不要说「被标记为X」「整体影响为平」这种话；要把它翻译成对当事人意味着什么"
+        "（例如「增凶」=这股力量这步运里反而帮倒忙、加重负担；「平」=对顺逆没明显影响）。"
+        "也绝不要出现「被标记为」「分析结果提示」「标记为」「数据显示」这类指代后台数据的"
+        "措辞——直接、自然地把判断说出来，就像你自己看出来的，不要让人感觉你在念一份表格。"
         # Product convention: 八字看大不看小 — cap timing granularity at 流年.
         "八字看大不看小，只谈大方向、长周期的趋势——时间粒度最多到「流年（哪一年）」为止；"
         "绝不要给出比流年更细的判断：不预测具体某月、某日的宜忌或时机，不报具体日期的吉凶，"

@@ -7,6 +7,7 @@ from typing import Any
 
 from bazibase import cast_chart, diagnose, assess_pillar_facts
 from bazibase.pillars import _make_pillar
+from bazibase.rules.fortune import ROLE_PLAIN
 from bazibase.arbitration import (
     ArbitrationParseError,
     ArbitrationResponse,
@@ -113,8 +114,8 @@ def _timeline_facts(chart, diagnosis, reference_year: int | None) -> list[dict[s
             "虚岁": y - birth_year + 1,
             "流年": gz,
             "所在大运": lp.pillar.stem_branch if lp else "未起运",
-            "天干": f"{facts['stem']['ten_god']}/{facts['stem']['role']}",
-            "地支": (f"{facts['branch']['ten_god']}/{facts['branch']['role']}"
+            "天干": f"{facts['stem']['ten_god']}（{ROLE_PLAIN.get(facts['stem']['role'], facts['stem']['role'])}）",
+            "地支": (f"{facts['branch']['ten_god']}（{ROLE_PLAIN.get(facts['branch']['role'], facts['branch']['role'])}）"
                      if facts.get("branch") else None),
             "关系": facts.get("relations", []),
         })

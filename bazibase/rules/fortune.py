@@ -96,6 +96,17 @@ def _ten_god_element(day_master: str, ten_god_name: str) -> str:
     return dm
 
 
+# Plain-language gloss of each internal role code, so the prompt feeds meaning
+# (not the terse 喜/忌/增凶/平 jargon the model would otherwise recite verbatim).
+ROLE_PLAIN = {
+    "喜": "对你有利",
+    "忌": "对你不利",
+    "助用": "对你有利",
+    "增凶": "对你不利（反帮倒忙）",
+    "平": "影响不大",
+}
+
+
 @dataclass(frozen=True)
 class TenGodRole:
     """One stem's 十神 and its role relative to the natal 格局."""
@@ -309,4 +320,5 @@ __all__ = [
     "TenGodRole",
     "PillarFacts",
     "assess_pillar_facts",
+    "ROLE_PLAIN",
 ]
