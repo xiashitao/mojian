@@ -27,13 +27,15 @@ export function ArchiveSidebar({
   return (
     <aside className={`archive ${isOpen ? "is-open" : ""}`}>
       <div className="archive__brand">
-        <KairosLogo
-          size={32}
-          className="archive__brand-logo"
-          role="button"
+        <button
+          type="button"
+          className="archive__brand-home"
           onClick={onHome}
-        />
-        <span className="archive__brand-name">Kairos</span>
+          aria-label="返回首页"
+        >
+          <KairosLogo size={32} className="archive__brand-logo" />
+          <span className="archive__brand-name">Kairos</span>
+        </button>
         <button
           type="button"
           className="panel-collapse panel-collapse--archive"

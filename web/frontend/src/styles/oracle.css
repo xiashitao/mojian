@@ -577,12 +577,31 @@
   flex-shrink: 0;
 }
 
+/* Logo + name are one home button (tap to return to the landing page). */
+.archive__brand-home {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  transition: opacity 0.15s;
+}
+
+.archive__brand-home:hover {
+  opacity: 0.78;
+}
+
 .archive__brand-logo {
   width: 32px;
   height: 32px;
   flex-shrink: 0;
   color: var(--bone-200);
-  cursor: pointer;
 }
 
 .archive__brand-name {

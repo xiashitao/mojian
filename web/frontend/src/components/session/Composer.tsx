@@ -1,6 +1,10 @@
-import { useState, type KeyboardEvent } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { ComposerHints } from "./ComposerHints";
 import { TonePopover, toneLabel, type ToneId } from "./TonePopover";
+
+const PLACEHOLDER_FULL = "出生日期、地点、性别，以及你想了解的问题。";
+const PLACEHOLDER_MOBILE = "出生信息和你想问的";
+const MOBILE_QUERY = "(max-width: 640px)";
 
 export interface ComposerProps {
   value: string;
@@ -15,6 +19,16 @@ export interface ComposerProps {
 /** Bottom composer: textarea, typing indicator, tone selector and send / stop button. */
 export function Composer({ value, loading, tone, onToneChange, onChange, onSend, onStop }: ComposerProps) {
   const [toneOpen, setToneOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(MOBILE_QUERY).matches,
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia(MOBILE_QUERY);
+    const onChange = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -61,7 +75,7 @@ export function Composer({ value, loading, tone, onToneChange, onChange, onSend,
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="出生日期、地点、性别，以及你想了解的问题。"
+            placeholder={isMobile ? PLACEHOLDER_MOBILE : PLACEHOLDER_FULL}
             autoComplete="off"
             rows={1}
           />
