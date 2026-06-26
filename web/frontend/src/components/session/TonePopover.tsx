@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-export type ToneId = "advisor" | "friend" | "direct";
+export type ToneId = "advisor" | "friend" | "direct" | "blunt";
 
 export interface ToneOption {
   id: ToneId;
@@ -13,6 +13,7 @@ export const TONE_OPTIONS: ToneOption[] = [
   { id: "advisor", label: "沉稳顾问", desc: "审慎克制，给有边界的参考" },
   { id: "friend", label: "温和朋友", desc: "亲切耐心，像朋友一样陪你聊" },
   { id: "direct", label: "直接利落", desc: "干脆直接，少铺垫" },
+  { id: "blunt", label: "铁口直断", desc: "开门见山，斩钉截铁，一句定调" },
 ];
 
 export const DEFAULT_TONE: ToneId = "advisor";
