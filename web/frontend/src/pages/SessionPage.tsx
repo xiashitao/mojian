@@ -5,6 +5,7 @@ import { ChatHeader } from "../components/session/ChatHeader";
 import { ChatContextBar } from "../components/session/ChatContextBar";
 import { MessageList } from "../components/session/MessageList";
 import { Composer } from "../components/session/Composer";
+import { AuthModal } from "../components/auth/AuthModal";
 
 export default function SessionPage() {
   const {
@@ -31,6 +32,8 @@ export default function SessionPage() {
     selectConversation,
     setMessageFeedback,
     goHome,
+    authPrompt,
+    closeAuthPrompt,
   } = useChatSession();
 
   const latestChart =
@@ -96,6 +99,13 @@ export default function SessionPage() {
           className="oracle__scrim"
           onClick={() => setMobilePanel(null)}
           aria-hidden
+        />
+      )}
+
+      {authPrompt && (
+        <AuthModal
+          onClose={closeAuthPrompt}
+          prompt="登录后才能开始对话，你的咨询和记忆会保存在账号里。"
         />
       )}
     </div>

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import confetti from "canvas-confetti";
 import { KairosLogo } from "../components/KairosLogo";
+import { AuthModal } from "../components/auth/AuthModal";
+import { useAuth } from "../auth";
 import { ThemeSwitcher } from "../theme";
 
 const RIBBON_COLORS = [
@@ -52,6 +54,8 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const [input, setInput] = useState("");
   const [phIndex, setPhIndex] = useState(0);
+  const [authOpen, setAuthOpen] = useState(false);
+  const { user, loading: authLoading } = useAuth();
   const storyRef = useRef<HTMLElement>(null);
   const finaleRef = useRef<HTMLDivElement>(null);
 
@@ -124,10 +128,19 @@ export default function LandingPage() {
     return () => io.disconnect();
   }, []);
 
+  // TEMP(login-gate disabled): run the action directly. Restore the check to re-gate.
+  const requireAuth = (action: () => void) => {
+    // if (!authLoading && !user) {
+    //   setAuthOpen(true);
+    //   return;
+    // }
+    action();
+  };
+
   const handleSubmit = (text: string) => {
     const t = text.trim() || PLACEHOLDERS[phIndex];
     if (!t) return;
-    navigate("/session", { state: { initialMessage: t } });
+    requireAuth(() => navigate("/session", { state: { initialMessage: t } }));
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -159,9 +172,9 @@ export default function LandingPage() {
           <button
             type="button"
             className="oracle-header__cta"
-            onClick={() => navigate("/session")}
+            onClick={() => requireAuth(() => navigate("/session"))}
           >
-            开始对话
+            进入应用
           </button>
         </nav>
       </header>
@@ -305,23 +318,23 @@ export default function LandingPage() {
           <article className="story__section" data-n="04">
             <div className="story__col story__col--text">
               <span className="story__num">04</span>
-              <h2 className="story__title">给的是建议，不是玄话</h2>
+              <h2 className="story__title">看的是大趋势，不是玄话</h2>
               <p className="story__desc">
-                不说"必有大灾"这种废话。给的是"下个月午火当令，利于签约"这种带时机、可执行的判断。
+                不说"必有大灾"这种废话，也不掐指算某天某时。八字看大不看小——给的是"今年火旺得用，利于求职、开新局"这种看一年大势、可参考的判断。
               </p>
             </div>
             <div className="story__col story__col--demo">
               <div className="demo demo--advice">
                 <div className="demo__advice-head">
-                  <span className="demo__advice-when">下个月 · 午月</span>
+                  <span className="demo__advice-when">今年 · 流年大势</span>
                   <span className="demo__tag demo__tag--go">宜</span>
                 </div>
                 <p className="demo__advice-body">
-                  火旺当令，正合用神。利于签约、求职、开新局。
+                  今年火气旺、正合用神，利于求职、开新局、把信用立起来。
                 </p>
                 <div className="demo__advice-foot">
                   <span className="demo__tag demo__tag--no">忌</span>
-                  <span>子日 · 正北远行 · 水冷灭火</span>
+                  <span>忌冒进扩张 · 慎走水重的北方</span>
                 </div>
               </div>
             </div>
@@ -362,13 +375,20 @@ export default function LandingPage() {
             <button
               type="button"
               className="story__finale-btn"
-              onClick={() => navigate("/session")}
+              onClick={() => requireAuth(() => navigate("/session"))}
             >
-              开始对话 →
+              进入应用 →
             </button>
           </div>
         </section>
       </main>
+
+      {authOpen && (
+        <AuthModal
+          onClose={() => setAuthOpen(false)}
+          prompt="登录后才能开始对话，你的咨询和记忆会保存在账号里。"
+        />
+      )}
     </div>
   );
 }

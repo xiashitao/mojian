@@ -123,6 +123,16 @@
   border-color: var(--cinnabar);
 }
 
+@keyframes auth-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes auth-modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
 .auth-scrim {
   position: fixed;
   inset: 0;
@@ -132,6 +142,7 @@
   justify-content: center;
   background: rgba(0, 0, 0, 0.5);
   padding: 20px;
+  animation: auth-scrim-in 160ms ease-out;
 }
 
 .auth-modal {
@@ -141,6 +152,24 @@
   border: 1px solid var(--rule-line-bright);
   border-radius: 16px;
   padding: 22px;
+  animation: auth-modal-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-scrim,
+  .auth-modal {
+    animation: none;
+  }
+}
+
+.auth-modal__prompt {
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--rule-line);
+  font-family: var(--font-cn);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--bone-300);
 }
 
 .auth-modal__tabs {
@@ -151,7 +180,7 @@
 
 .auth-modal__tab {
   flex: 1;
-  padding: 8px;
+  padding: 10px 8px;
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -159,6 +188,17 @@
   font-family: var(--font-cn);
   font-size: 14px;
   cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.auth-modal__tab:hover:not(.is-active) {
+  color: var(--bone-200);
+}
+
+.auth-modal__tab:focus-visible {
+  outline: 2px solid rgba(237, 228, 204, 0.72);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 .auth-modal__tab.is-active {
@@ -194,8 +234,10 @@
 
 .auth-error {
   margin: 0;
-  color: var(--cinnabar);
+  /* vermilion clears WCAG AA (4.5:1) on the dark modal; cinnabar fell short */
+  color: var(--vermilion);
   font-size: 12px;
+  line-height: 1.5;
 }
 
 .auth-submit {
@@ -208,11 +250,21 @@
   font-family: var(--font-cn);
   font-size: 14px;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  transition: background 0.15s, opacity 0.15s, transform 0.15s;
 }
 
 .auth-submit:hover:not(:disabled) {
   background: var(--vermilion);
+  transform: translateY(-1px);
+}
+
+.auth-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.auth-submit:focus-visible {
+  outline: 2px solid rgba(237, 228, 204, 0.72);
+  outline-offset: 3px;
 }
 
 .auth-submit:disabled {

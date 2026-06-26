@@ -1,0 +1,29 @@
+# Kairos / 墨鉴 — Caddy 部署配置
+#
+# 用法：把下面的 SITE_ADDRESS 换成你的站点地址。
+#   · 没有域名：用 IP 即域名服务，例如公网 IP 是 203.0.113.10，就写
+#       203.0.113.10.nip.io        （nip.io 自动解析到该 IP，可签真证书）
+#     若 nip.io 签证书失败，换 sslip.io：203.0.113.10.sslip.io
+#   · 有域名：直接写域名，例如 mojian.com
+#
+# 然后：caddy run --config /opt/bazibase/web/Caddyfile
+# Caddy 会自动申请 / 续期 Let's Encrypt 证书，并把 HTTP 跳转到 HTTPS。
+
+203.0.113.10.nip.io {
+	root * /opt/bazibase/web/frontend/dist
+	encode gzip
+
+	# /api/* 反代到本机 uvicorn。
+	# flush_interval -1 关闭响应缓冲——聊天是流式 NDJSON，否则不能逐字输出。
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8010 {
+			flush_interval -1
+		}
+	}
+
+	# 其余都走前端 SPA：找不到的文件回退 index.html（支持 /session/:id 前端路由）。
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}

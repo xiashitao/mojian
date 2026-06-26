@@ -358,7 +358,8 @@
   font-size: 14px;
   min-height: 38px;
   padding: 7px 18px;
-  border-radius: 4px;
+  /* pill, to match the session page's text buttons (login / chips / tone) */
+  border-radius: 999px;
   cursor: pointer;
   letter-spacing: 0.04em;
   transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;

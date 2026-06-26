@@ -292,7 +292,8 @@
   flex-shrink: 0;
   width: 44px;
   height: 44px;
-  border-radius: 4px;
+  /* round, to match the session composer's send button */
+  border-radius: 50%;
   border: 1px solid rgba(198, 77, 63, 0.58);
   background: var(--cinnabar);
   color: var(--bone-100);
@@ -750,21 +751,31 @@
   letter-spacing: 0.06em;
   color: var(--bone-200);
 }
+/* Breathing scale — a gentle, continuous invitation to enter the app. */
+@keyframes finale-invite {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
 .story__finale-btn {
   font-family: var(--font-cn);
   font-size: 16px;
   letter-spacing: 0.08em;
   padding: 14px 40px;
-  border-radius: 4px;
+  /* pill, to match the session page's text buttons */
+  border-radius: 999px;
   border: 1px solid rgba(198, 77, 63, 0.58);
   background: var(--cinnabar);
   color: var(--bone-100);
   cursor: pointer;
+  animation: finale-invite 2.4s ease-in-out infinite;
   transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 }
 .story__finale-btn:hover {
   background: var(--vermilion);
   border-color: rgba(216, 95, 77, 0.72);
+  /* pause the breathing; the lift takes over cleanly */
+  animation: none;
   transform: translateY(-2px);
 }
 
@@ -1028,6 +1039,10 @@
   .landing__send,
   .story__finale-btn {
     transition: none;
+  }
+
+  .story__finale-btn {
+    animation: none;
   }
 
   .landing__placeholder,

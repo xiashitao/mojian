@@ -5,6 +5,14 @@ import type { ChatAnalysis, ChatRequest, ChatResponse } from "../types/api";
 
 const BASE_URL = "/api";
 
+/** Thrown when the chat endpoint rejects an unauthenticated request (401). */
+export class AuthRequiredError extends Error {
+  constructor() {
+    super("需要登录后才能使用对话");
+    this.name = "AuthRequiredError";
+  }
+}
+
 // 切换为 true 可完全不启动后端，在浏览器内验证流式 UI
 const MOCK_MODE = import.meta.env.VITE_MOCK_CHAT === "true";
 
@@ -51,10 +59,14 @@ export async function sendChatMessage(
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ ...req, anon_id: getAnonId() }),
     signal,
   });
 
+  if (res.status === 401) {
+    throw new AuthRequiredError();
+  }
   if (!res.ok || !res.body) {
     throw new Error(`Chat request failed: ${res.statusText}`);
   }

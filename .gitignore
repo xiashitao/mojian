@@ -36,6 +36,11 @@ pnpm-debug.log*
 # Logs
 *.log
 
+# Secrets / local env (never commit)
+.env
+.env.*
+!.env.example
+
 # Database (runtime data)
 *.db
 *.sqlite

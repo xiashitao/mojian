@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { sendChatMessage } from "../api/chatApi";
+import { AuthRequiredError, sendChatMessage } from "../api/chatApi";
 import { getConversation } from "../api/conversationApi";
+import { useAuth } from "../auth";
 import type { ChatState, Topic } from "../types/api";
 import type {
   BirthInfo,
@@ -41,8 +42,10 @@ export function useChatSession() {
     location.state as { initialMessage?: string } | null
   )?.initialMessage;
 
+  const { user, loading: authLoading } = useAuth();
   const { conversations, refresh: refreshConversations } = useConversations();
   const [archiveCollapsed, setArchiveCollapsed] = useArchiveCollapsed();
+  const [authPrompt, setAuthPrompt] = useState(false);
 
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<UiMessage[]>([]);
@@ -122,6 +125,13 @@ export function useChatSession() {
       const text = (textInput ?? input).trim();
       if (!text || loading) return;
 
+      // TEMP(login-gate disabled): allow anonymous send. Restore to re-gate.
+      // if (!authLoading && !user) {
+      //   setInput((cur) => cur || text);
+      //   setAuthPrompt(true);
+      //   return;
+      // }
+
       const userId = `local-${crypto.randomUUID()}`;
       const pendingId = `pending-${crypto.randomUUID()}`;
       const now = new Date().toISOString();
@@ -167,6 +177,16 @@ export function useChatSession() {
       } catch (err) {
         // Aborted by the user (stop button / Esc) — revert is handled in stop().
         if (controller.signal.aborted) return;
+        // Session expired / not authenticated — drop the optimistic pair,
+        // restore the text, and guide the user to log in.
+        if (err instanceof AuthRequiredError) {
+          setMessages((prev) =>
+            prev.filter((m) => m.id !== userId && m.id !== pendingId),
+          );
+          setInput((cur) => cur || text);
+          setAuthPrompt(true);
+          return;
+        }
         const message = err instanceof Error ? err.message : "发送失败";
         setMessages((prev) =>
           prev.map((m) =>
@@ -180,7 +200,7 @@ export function useChatSession() {
         setLoading(false);
       }
     },
-    [conversationId, input, loading, navigate, refreshConversations, tone],
+    [authLoading, conversationId, input, loading, navigate, refreshConversations, tone, user],
   );
 
   const stop = useCallback(() => {
@@ -261,5 +281,7 @@ export function useChatSession() {
     selectConversation,
     setMessageFeedback,
     goHome,
+    authPrompt,
+    closeAuthPrompt: () => setAuthPrompt(false),
   } as const;
 }
