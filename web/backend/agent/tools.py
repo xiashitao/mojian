@@ -5,7 +5,7 @@ from collections import OrderedDict
 from datetime import datetime
 from typing import Any
 
-from bazibase import cast_chart, diagnose, assess_pillar_fortune
+from bazibase import cast_chart, diagnose, assess_pillar_facts
 from bazibase.arbitration import (
     ArbitrationParseError,
     ArbitrationResponse,
@@ -93,7 +93,7 @@ def _compute_bazibase_tools(
     arbitration = _resolve_arbitration(arbitration)
 
     chart_dict = enrich_chart(chart.to_dict())
-    _attach_period_fortune(chart, diagnosis, chart_dict)
+    _attach_period_facts(chart, diagnosis, chart_dict)
 
     return {
         "chart": chart_dict,
@@ -103,11 +103,11 @@ def _compute_bazibase_tools(
     }
 
 
-def _attach_period_fortune(chart, diagnosis, chart_dict: dict[str, Any]) -> None:
-    """Annotate the current 大运/流年 with a deterministic 喜忌 verdict.
-
-    Derived from the chart's own 用神/格局 (子平真诠 论行运), so the responder
-    has a grounded good/bad judgment instead of guessing.
+def _attach_period_facts(chart, diagnosis, chart_dict: dict[str, Any]) -> None:
+    """Annotate the current 大运/流年 with the engine's *deterministic facts*
+    (十神 roles + 刑冲合会 relationships). No 吉凶 verdict — the responder LLM
+    weighs 命局(体)+大运(路)+流年 into a 顺逆 read (确定交引擎、不确定交模型).
+    The 流年 facts include its relationship to the running 大运 ("综合起来看").
     """
     cp = chart.current_period
     cp_dict = chart_dict.get("current_period")
@@ -115,10 +115,14 @@ def _attach_period_fortune(chart, diagnosis, chart_dict: dict[str, Any]) -> None
         return
     yong_tg = diagnosis.yong_shen.ten_god
     dm = chart.day_master
-    cp_dict["liunian_fortune"] = assess_pillar_fortune(dm, yong_tg, cp.liunian).to_dict()
+    natal_branches = tuple(p.branch for p in chart.four_pillars)
+    luck_branch = cp.luck_pillar.pillar.branch if cp.luck_pillar is not None else None
+    cp_dict["liunian_facts"] = assess_pillar_facts(
+        dm, yong_tg, cp.liunian, natal_branches=natal_branches, luck_branch=luck_branch
+    ).to_dict()
     if cp.luck_pillar is not None:
-        cp_dict["luck_fortune"] = assess_pillar_fortune(
-            dm, yong_tg, cp.luck_pillar.pillar
+        cp_dict["luck_facts"] = assess_pillar_facts(
+            dm, yong_tg, cp.luck_pillar.pillar, natal_branches=natal_branches
         ).to_dict()
 
 

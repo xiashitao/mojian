@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterator
 from typing import Any
 
@@ -16,6 +17,49 @@ _FIELD_CN = {
     "birth_place": "出生地",
     "gender": "性别",
 }
+
+# ── Grounding guardrail ──────────────────────────────────────────────────────
+# The engine is authoritative; the LLM only does wording. These deterministic
+# checks catch the model contradicting / leaking the engine's facts so we can
+# record it on the run trace (monitoring + regression signal for the eval set).
+_TEN_GOD_TERMS = (
+    "正官", "七杀", "偏官", "正财", "偏财", "正印", "偏印",
+    "食神", "伤官", "比肩", "劫财", "比劫", "食伤", "官杀", "印枭",
+)
+_GANZHI_RE = re.compile(r"[甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥]")
+# "今年/现在/目前/当前 … N 岁" — the person's *current* age claim, the spot the
+# model is most likely to invent (e.g. saying 周岁 30 when the chart is 虚岁 31).
+_CURRENT_AGE_RE = re.compile(r"(?:今年|现在|目前|当前)[^。，；！？\n]{0,8}?(\d{1,3})\s*岁")
+
+
+def check_grounding(reply: str, context: dict[str, Any]) -> list[str]:
+    """Return a list of grounding violations in a generated reply.
+
+    Deterministic and conservative (low false-positive). Non-blocking: callers
+    record the result on the trace rather than rejecting the (already-streamed)
+    reply. Also reusable by the eval harness.
+    """
+    violations: list[str] = []
+
+    leaked_gods = sorted({g for g in _TEN_GOD_TERMS if g in reply})
+    if leaked_gods:
+        violations.append("泄漏十神术语：" + "、".join(leaked_gods))
+    ganzhi = sorted(set(_GANZHI_RE.findall(reply)))
+    if ganzhi:
+        violations.append("泄漏干支术语：" + "、".join(ganzhi))
+
+    cp = context.get("current_period") or {}
+    nominal = cp.get("nominal_age")
+    if isinstance(nominal, int):
+        # The chart presents 虚岁 everywhere, so the prose must too — a bare
+        # 周岁 (虚岁-1) reads as the inconsistency users notice. If the 虚岁/周岁
+        # product convention changes, update this anchor with the chart.
+        for m in _CURRENT_AGE_RE.finditer(reply):
+            said = int(m.group(1))
+            if said != nominal:
+                violations.append(f"当前年龄说成{said}岁，与引擎虚岁{nominal}不符")
+
+    return violations
 
 
 def build_missing_info_reply(topic: Topic | None, birth_info: BirthInfo) -> tuple[str, ChatState]:
@@ -150,13 +194,15 @@ def stream_consultation_reply(
         return
 
     full_reply = "".join(collected)
+    grounding_violations = check_grounding(full_reply, context)
     reflection = reflect_on_reply(actual_topic, history, full_reply, user_message=user_message)
     followups = reflection["followups"]
     state = ChatState(topic=actual_topic, needs_more_info=False,
                      missing_fields=[], suggested_followups=followups)
     generation_trace = {"mode": "deepseek_stream", "topic": actual_topic,
                         "reply": full_reply, "raw_response": full_reply,
-                        "followups": followups, "conclusion": reflection["conclusion"]}
+                        "followups": followups, "conclusion": reflection["conclusion"],
+                        "grounding_violations": grounding_violations}
     yield "", state, generation_trace
 
 
@@ -370,43 +416,49 @@ def reflect_on_reply(
 
 
 def _summarize_current_period(cp: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Compact, grounding-friendly view of the current 大运/流年 for the prompt."""
+    """Compact view of the current 大运/流年 for the prompt — the engine's
+    deterministic *facts* (十神 roles + 刑冲合会). The model weighs 顺逆 itself."""
     if not cp:
         return None
-    ln = cp.get("liunian", {})
     lp = cp.get("luck_pillar")
     summary: dict[str, Any] = {
         "公历年": cp.get("year"),
         "虚岁": cp.get("nominal_age"),
-        "流年十神": {
-            "天干": ln.get("stem_ten_god"),
-            "地支": ln.get("branch_ten_god"),
-        },
     }
     if lp:
-        summary["当前大运十神"] = {
-            "天干": lp.get("stem_ten_god"),
-            "地支": lp.get("branch_ten_god"),
-            "起止年龄": [lp.get("start_age"), lp.get("end_age")],
-        }
-    else:
-        # status == pre_luck / beyond_range
+        summary["大运起止年龄"] = [lp.get("start_age"), lp.get("end_age")]
+    elif cp.get("status"):
         summary["当前大运"] = "尚未起运" if cp.get("status") == "pre_luck" else "超出推算范围"
-    # Deterministic 喜忌 verdicts — the LLM must defer to these, not invent.
-    luck_fortune = _fortune_view(cp.get("luck_fortune"))
-    if luck_fortune:
-        summary["当前大运吉凶"] = luck_fortune
-    liunian_fortune = _fortune_view(cp.get("liunian_fortune"))
-    if liunian_fortune:
-        summary["今年流年吉凶"] = liunian_fortune
+
+    luck_facts = _facts_view(cp.get("luck_facts"))
+    if luck_facts:
+        summary["当前大运·事实"] = luck_facts
+    liunian_facts = _facts_view(cp.get("liunian_facts"))
+    if liunian_facts:
+        summary["今年流年·事实"] = liunian_facts
     return summary
 
 
-def _fortune_view(f: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Trim a PillarFortune dict to the verdict + reason the LLM must follow."""
+def _facts_view(f: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The engine's deterministic facts for a 大运/流年 — 十神角色 + 与命局/大运的
+    刑冲合会关系。No 吉凶 verdict: the model weighs these into 顺逆 itself."""
     if not f:
         return None
-    return {"判定": f.get("verdict"), "依据": f.get("reason")}
+
+    def role(r: dict[str, Any] | None) -> str | None:
+        if not r:
+            return None
+        return f"{r.get('char')}（{r.get('ten_god')}·{r.get('role')}）"
+
+    view: dict[str, Any] = {"干支": f.get("pillar"), "天干": role(f.get("stem"))}
+    if f.get("branch"):
+        view["地支本气"] = role(f.get("branch"))
+    relations = f.get("relations") or []
+    if relations:
+        view["与命局/大运的关系"] = relations
+    if f.get("yong_unknown"):
+        view["说明"] = "用神未定，喜忌待判"
+    return view
 
 
 def _build_analysis_block(topic: Topic, context: dict[str, Any], *, clarify_previous: bool) -> dict[str, Any]:
@@ -447,10 +499,21 @@ def _build_stream_reply_prompt(
         "分析结果里的 current_period 是用户「当下所处的大运和今年流年」；"
         "当问题涉及近期、今年、当下时机或近几年走势时，要结合它来谈，"
         "但同样用日常语言，不要报出干支或十神这类术语。"
-        "其中「当前大运吉凶」「今年流年吉凶」是引擎按规则算出的判定（吉/凶/参半/平）；"
-        "你必须严格依据这个判定和它的「依据」来说这步运、这一年是顺还是不顺，"
-        "绝对不能自己改判或凭常识说成相反的好坏。判定为「参半」就要讲清两面、不要一边倒；"
-        "若没有给出吉凶判定，则不要对运势好坏下断语。"
+        # Product convention: 八字看大不看小 — cap timing granularity at 流年.
+        "八字看大不看小，只谈大方向、长周期的趋势——时间粒度最多到「流年（哪一年）」为止；"
+        "绝不要给出比流年更细的判断：不预测具体某月、某日的宜忌或时机，不报具体日期的吉凶，"
+        "谈时机时落到「哪一年、哪一步大运」这个层面即可，不要细化到月、日。"
+        "「当前大运·事实」「今年流年·事实」是引擎给出的**确定事实**——干支十神的角色"
+        "（喜/忌/助用/平）、以及与命局四柱、当前大运之间的刑冲合会关系。"
+        "八字以原命局为「车」、大运为「路」、流年为「当下」，三者要综合起来看："
+        "请你据这些事实，结合命局体用，自行权衡这步大运、今年流年是顺是逆、顺逆几分；"
+        "不得编造事实中没有的关系，也不得改动用神，但顺逆的判断由你综合给出。"
+        "若标注「用神未定」，则不要对运势好坏下硬性断语。"
+        # Grounding: the engine's numbers are authoritative — the model may cite
+        # them but must never recompute or convert them (the 虚岁→周岁 bug).
+        "涉及年龄、年份或任何具体数字时，只能直接引用「结构化分析结果」里给定的数值，"
+        "绝对不要自行计算、推算或换算。分析结果给出的年龄是『虚岁』，"
+        "提到年龄时就用这个数字并说明是虚岁，不要换算成周岁、也不要自己另算一个年龄。"
         "不要提及具体流派名、古籍或后台规则，也不要堆砌命理术语。"
         "用日常语言展开，依次涵盖：直接结论、适配的条件或方向、需要注意的风险、一条可执行的建议。"
         "篇幅约300–500字，分2–4个自然段。"

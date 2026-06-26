@@ -47,8 +47,8 @@ from .interactions import (
 )
 from .fortune import (
     TenGodRole,
-    PillarFortune,
-    assess_pillar_fortune,
+    PillarFacts,
+    assess_pillar_facts,
 )
 
 __all__ = [
@@ -88,8 +88,8 @@ __all__ = [
     "ZI_XING_BRANCHES",
     "HAI_TABLE",
     "detect_interactions",
-    # fortune (大运/流年 喜忌)
+    # fortune (大运/流年 行运事实)
     "TenGodRole",
-    "PillarFortune",
-    "assess_pillar_fortune",
+    "PillarFacts",
+    "assess_pillar_facts",
 ]
