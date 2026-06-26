@@ -176,7 +176,7 @@ def stream_consultation_reply(
     collected = []
     try:
         for chunk in stream(prompt["system_prompt"], prompt["user_prompt"],
-                                      temperature=0.7):
+                                      temperature=0.7, timeout=120):
             collected.append(chunk)
             yield chunk, None, None
     except LLMError:

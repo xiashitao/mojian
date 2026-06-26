@@ -186,6 +186,7 @@ def _resolve_arbitration(result: ArbitrationResult) -> ArbitrationResult:
                 prompt.system_prompt,
                 prompt.user_prompt,
                 temperature=0.0,
+                timeout=120,  # flagship models (e.g. glm-5.2) can be slow
             )
             response = parse_arbitration_response(prompt.case, raw)
             result = attach_response(result, prompt.case.case_id, response)
