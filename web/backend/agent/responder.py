@@ -6,6 +6,8 @@ import re
 from collections.abc import Iterator
 from typing import Any
 
+from bazibase.constants import ELEMENT_CONQUEST, ELEMENT_PRODUCTION
+
 from ..services.llm import LLMError, complete, is_configured, stream
 from .context import render_history, render_notes, topic_cn
 from .models import BirthInfo, ChatState, Topic
@@ -22,10 +24,8 @@ _FIELD_CN = {
 # The engine is authoritative; the LLM only does wording. These deterministic
 # checks catch the model contradicting / leaking the engine's facts so we can
 # record it on the run trace (monitoring + regression signal for the eval set).
-_TEN_GOD_TERMS = (
-    "正官", "七杀", "偏官", "正财", "偏财", "正印", "偏印",
-    "食神", "伤官", "比肩", "劫财", "比劫", "食伤", "官杀", "印枭",
-)
+# Policy A: core 十神 terms are allowed (with a plain-language gloss) for depth,
+# so we no longer flag them — only raw 干支 dumps and age contradictions.
 _GANZHI_RE = re.compile(r"[甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥]")
 # "今年/现在/目前/当前 … N 岁" — the person's *current* age claim, the spot the
 # model is most likely to invent (e.g. saying 周岁 30 when the chart is 虚岁 31).
@@ -41,9 +41,6 @@ def check_grounding(reply: str, context: dict[str, Any]) -> list[str]:
     """
     violations: list[str] = []
 
-    leaked_gods = sorted({g for g in _TEN_GOD_TERMS if g in reply})
-    if leaked_gods:
-        violations.append("泄漏十神术语：" + "、".join(leaked_gods))
     ganzhi = sorted(set(_GANZHI_RE.findall(reply)))
     if ganzhi:
         violations.append("泄漏干支术语：" + "、".join(ganzhi))
@@ -206,6 +203,81 @@ def stream_consultation_reply(
     yield "", state, generation_trace
 
 
+# ── Rich static facts for the prompt (depth: 宫位 / 五行流向 / 大运走向) ──
+_POS_LABEL = {
+    "year": "年柱·根基早年祖上",
+    "month": "月柱·格局事业父母",
+    "day": "日柱·自身配偶",
+    "hour": "时柱·子女晚年下属",
+}
+_INTERACTION_KEYS = ("gan_he", "san_he", "ban_he", "san_hui", "ban_hui", "chong", "xing", "hai")
+
+
+def _ten_god_class(dm_el: str, el: str) -> str:
+    """An element's 十神 category relative to the 日主 element (so 五行 = 十神)."""
+    if el == dm_el:
+        return "比劫"
+    if ELEMENT_PRODUCTION.get(dm_el) == el:
+        return "食伤"
+    if ELEMENT_CONQUEST.get(dm_el) == el:
+        return "财"
+    if ELEMENT_CONQUEST.get(el) == dm_el:
+        return "官杀"
+    return "印"
+
+
+def _four_pillars_view(chart: dict[str, Any]) -> dict[str, str]:
+    """四柱十神，按宫位标注——让 LLM 知道谁透干、星落哪宫。"""
+    fp = chart.get("four_pillars", {})
+    out: dict[str, str] = {}
+    for pos in ("year", "month", "day", "hour"):
+        p = fp.get(pos) or {}
+        stem = p.get("stem", {})
+        branch = p.get("branch", {})
+        out[_POS_LABEL[pos]] = (
+            f"{p.get('stem_branch')}（天干{stem.get('char')}={stem.get('ten_god')}，"
+            f"地支{branch.get('char')}本气={branch.get('ten_god')}）"
+        )
+    return out
+
+
+def _wuxing_view(chart: dict[str, Any]) -> dict[str, str]:
+    """五行力量分布，每行标其十神类——给 LLM 推「气的流向 × 十神」。"""
+    dist = chart.get("element_distribution") or {}
+    dm_el = chart.get("day_master_element")
+    out: dict[str, str] = {}
+    for el in ("木", "火", "土", "金", "水"):
+        d = dist.get(el) or {}
+        cls = _ten_god_class(dm_el, el) if dm_el else ""
+        out[f"{el}（{cls}）"] = f"{d.get('percentage', 0)}%"
+    return out
+
+
+def _natal_interactions_view(diagnosis: dict[str, Any]) -> list[str]:
+    """命局四柱之间的刑冲合会。"""
+    inter = diagnosis.get("interactions") or {}
+    out: list[str] = []
+    for k in _INTERACTION_KEYS:
+        for i in inter.get(k, []):
+            note = i.get("note") or i.get("kind")
+            if note:
+                out.append(note)
+    return out
+
+
+def _luck_sequence_view(chart: dict[str, Any]) -> list[str]:
+    """大运整条序列（干支 + 起止虚岁 + 公历年 + 十神）——人生阶段走向，带年份
+    让模型能准确说出"哪一年走哪步运"，而不必自行换算。"""
+    out: list[str] = []
+    for lp in (chart.get("luck") or {}).get("pillars", []):
+        out.append(
+            f"{lp.get('stem_branch')}（{lp.get('start_age')}-{lp.get('end_age')}岁／"
+            f"{lp.get('start_year')}-{lp.get('end_year')}年，"
+            f"{lp.get('stem_ten_god')}/{lp.get('branch_ten_god')}）"
+        )
+    return out
+
+
 def _context_from_tool_result(
     chart: dict[str, Any],
     diagnosis: dict[str, Any],
@@ -240,6 +312,11 @@ def _context_from_tool_result(
         "cheng_bai": cheng.get("verdict"),
         "has_unresolved_cases": has_unresolved,
         "arbitration_decisions": arbitration_decisions,
+        # Rich static facts so the model can reason specifically, not generically.
+        "four_pillars": _four_pillars_view(chart),
+        "wuxing": _wuxing_view(chart),
+        "natal_interactions": _natal_interactions_view(diagnosis),
+        "luck_sequence": _luck_sequence_view(chart),
         # Current 大运/流年 resolved at cast time — the shared "now" for any
         # time-sensitive part of the answer. May be None for charts cast
         # without a reference_year.
@@ -473,7 +550,13 @@ def _build_analysis_block(topic: Topic, context: dict[str, Any], *, clarify_prev
         "cheng_bai": context.get("cheng_bai"),
         "has_unresolved_cases": context.get("has_unresolved_cases"),
         "arbitration_decisions": context.get("arbitration_decisions", {}),
+        "四柱十神(按宫位)": context.get("four_pillars"),
+        "五行力量(标十神类)": context.get("wuxing"),
+        "大运走向(整条)": context.get("luck_sequence"),
     }
+    natal = context.get("natal_interactions")
+    if natal:
+        block["命局刑冲合会"] = natal
     current_period = _summarize_current_period(context.get("current_period"))
     if current_period is not None:
         block["current_period"] = current_period
@@ -506,28 +589,50 @@ def _build_stream_reply_prompt(
         "请直接、充分地回答「用户当前的问题」，回答必须基于下方结构化分析结果，"
         "不要编造超出分析结论的内容，也不要重复之前已经说过的话。"
         "若有「过往咨询记录」，自然地保持一致、可适当呼应，但不要照搬复述。"
+        # Stop the boilerplate preamble: don't re-introduce the chart structure
+        # every turn — the user already saw it (first reply + 命盘卡).
+        "命主的命局结构（日主、身强弱、格局、用神、救应等）只在首次咨询或问题直接"
+        "涉及时点一下即可；若之前已经说过，不要在每次回答开头都把「身强、某格、"
+        "有救应、底子不差」这类结构重新复述一遍——用户已经知道了。开头第一句就直接"
+        "给与「当前问题」相关的结论，把篇幅全部留给这个问题的新信息。"
         "分析结果里的 current_period 是用户「当下所处的大运和今年流年」；"
-        "当问题涉及近期、今年、当下时机或近几年走势时，要结合它来谈，"
-        "但同样用日常语言，不要报出干支或十神这类术语。"
+        "当问题涉及近期、今年、当下时机或近几年走势时，要结合它来谈。"
+        # Policy A: core 命理 terms allowed for depth, but each must be glossed in
+        # plain language; still no raw 干支 dumps, no jargon piling.
+        "讲解以日常语言为主；可以借用核心命理术语（如印、食伤、官杀、财、用神等）"
+        "把机理讲透，但每个术语首次出现时要顺带一句大白话解释，让外行也能懂；"
+        "不要报出具体干支（如甲子、丙午），也不要堆砌术语、写成排盘报告。"
         # Product convention: 八字看大不看小 — cap timing granularity at 流年.
         "八字看大不看小，只谈大方向、长周期的趋势——时间粒度最多到「流年（哪一年）」为止；"
         "绝不要给出比流年更细的判断：不预测具体某月、某日的宜忌或时机，不报具体日期的吉凶，"
-        "也不要把流年再切成上半年/下半年、某季度、某月；谈时机时落到「哪一年、哪一步大运」"
-        "这个层面即可，不要细化到半年、季、月、日。"
+        "也不要把流年再切成上半年/下半年、某季度、某月。"
+        # Years ARE the allowed grain (流年) — encourage stating them for concreteness.
+        "可以、也鼓励直接说出相关的公历年份（如「2026年」「2030年前后」「34岁起运、"
+        "即某年之后」），让判断更具体可信——年份就是流年粒度、属于允许范围；"
+        "只是别再往月、日细化。说年份时用「大运走向」「current_period」里给定的年份，"
+        "不要自己推算。"
         "「当前大运·事实」「今年流年·事实」是引擎给出的**确定事实**——干支十神的角色"
         "（喜/忌/助用/平）、以及与命局四柱、当前大运之间的刑冲合会关系。"
         "八字以原命局为「车」、大运为「路」、流年为「当下」，三者要综合起来看："
         "请你据这些事实，结合命局体用，自行权衡这步大运、今年流年是顺是逆、顺逆几分；"
         "不得编造事实中没有的关系，也不得改动用神，但顺逆的判断由你综合给出。"
         "若标注「用神未定」，则不要对运势好坏下硬性断语。"
+        # Depth: make the model reason from the rich structure, not generic labels.
+        "要用足下方的具体结构、给出只适用于这个命局的判断，杜绝放之四海皆准的话："
+        "（一）看四柱十神落在哪个宫位（年=根基早年、月=格局事业、日支=自身配偶、"
+        "时=子女晚年），结合宫位谈对应的人和事，别只说抽象格局；"
+        "（二）顺着五行生克看「气的流向」并结合十神——气往哪走、堵在哪、能不能顺生到"
+        "与这个问题相关的那个十神（印→比劫→食伤→财→官），哪一环接不上就是命局关键；"
+        "（三）结合「大运走向」整条谈人生阶段，而不是只看当前一步；遇到与人生时段相关"
+        "的问题（如学历，对应求学到各级升学考的那几步运、那几年），就落到相应时段来分析。"
         # Grounding: the engine's numbers are authoritative — the model may cite
         # them but must never recompute or convert them (the 虚岁→周岁 bug).
         "涉及年龄、年份或任何具体数字时，只能直接引用「结构化分析结果」里给定的数值，"
         "绝对不要自行计算、推算或换算。分析结果给出的年龄是『虚岁』，"
         "提到年龄时就用这个数字并说明是虚岁，不要换算成周岁、也不要自己另算一个年龄。"
-        "不要提及具体流派名、古籍或后台规则，也不要堆砌命理术语。"
+        "不要提及具体流派名、古籍或后台规则；术语点到为止、必带白话解释。"
         "用日常语言展开，依次涵盖：直接结论、适配的条件或方向、需要注意的风险、一条可执行的建议。"
-        "篇幅约300–500字，分2–4个自然段。"
+        "篇幅约400–700字，分3–5个自然段。"
         # Tone affects wording only; all constraints above still hold.
         f"{_tone_instruction(tone)}"
         "不要在结尾附上追问建议。"

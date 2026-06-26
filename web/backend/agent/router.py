@@ -38,6 +38,9 @@ def _action_for(intent: str, topic: Topic | None, birth_info: BirthInfo) -> Acti
         return "ask_birth_info"
     if intent == "clarify_previous":
         return "clarify"
-    if topic is None and intent in ("collect_birth_info", "unknown"):
+    # Only ask which direction when the user *just gave birth info* with no
+    # question. A real but unclassified question (e.g. "我的学历"，topic 不在四类
+    # 里) should be answered, not bounced back — 下游 actual_topic 会兜底默认话题。
+    if topic is None and intent == "collect_birth_info":
         return "ask_topic"
     return "consult"

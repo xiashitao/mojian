@@ -10,7 +10,7 @@ from typing import Any
 from ..services import llm
 from . import memory, repository
 from .chart_card import build_chart_card
-from .extractor import merge_birth_info
+from .extractor import merge_birth_info, _has_birth_signal
 from .ids import new_analysis_id
 from .models import ChatState, ConversationState, Topic
 from .router import route
@@ -24,6 +24,17 @@ from .tools import run_bazibase_tools
 from .tracing import TraceWriter
 
 from bazibase import solar_ganzhi_year
+
+
+def _recall_note(bi) -> str:
+    """A transparency line when the birth was recalled from memory, so the user
+    knows what it's using (and can correct it)."""
+    gender = "男" if bi.gender == "male" else "女" if bi.gender == "female" else ""
+    info = " · ".join(p for p in (bi.birth_date, bi.birth_place, gender) if p)
+    return (
+        f"（我先用你之前保存的生辰：{info} 来看；"
+        "如需更换，直接把新的生辰发我即可。）\n\n"
+    )
 
 
 def stream_chat(message: str, conversation_id: str | None = None, *, user_id: str | None = None, memory_key: str | None = None, tone: str | None = None) -> Iterator[str]:
@@ -62,6 +73,7 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
     try:
         state = _load_state(conv_id)
         # Seed remembered birth info so returning users skip re-entering it.
+        remembered = None
         if not state.birth_info.is_complete():
             remembered = memory.get_birth_info(memory_key)
             if remembered:
@@ -82,6 +94,17 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
         tracer.add("merge_session_state",
                    input_data={"previous_state": repository.get_conversation_state(conv_id)},
                    output_data=state.model_dump(), summary="Merged session state.")
+
+        # Transparency: if the birth was recalled from memory (the user didn't
+        # type it this turn) and it's the first turn, say what we're using.
+        birth_recalled = (
+            bool(remembered and remembered.is_complete())
+            and not _has_birth_signal(message)
+        )
+        first_turn = len(repository.get_conversation_messages(conv_id)) <= 1
+        recall_note = (
+            _recall_note(merged_birth_info) if birth_recalled and first_turn else ""
+        )
 
         if decision.action in ("smalltalk", "out_of_scope"):
             reply, chat_state = (
@@ -145,6 +168,10 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
                     {"type": "chart", "chart": chart_card_payload},
                     ensure_ascii=False,
                 ) + "\n"
+
+            if recall_note:
+                reply_parts.append(recall_note)
+                yield json.dumps({"type": "token", "text": recall_note}, ensure_ascii=False) + "\n"
 
             clarify = decision.action == "clarify"
             prior_messages = _prior_messages(conv_id, user_message["id"])
