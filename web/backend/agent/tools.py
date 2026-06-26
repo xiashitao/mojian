@@ -5,7 +5,7 @@ from collections import OrderedDict
 from datetime import datetime
 from typing import Any
 
-from bazibase import cast_chart, diagnose
+from bazibase import cast_chart, diagnose, assess_pillar_fortune
 from bazibase.arbitration import (
     ArbitrationParseError,
     ArbitrationResponse,
@@ -92,12 +92,34 @@ def _compute_bazibase_tools(
     arbitration = prepare_arbitration(diagnosis)
     arbitration = _resolve_arbitration(arbitration)
 
+    chart_dict = enrich_chart(chart.to_dict())
+    _attach_period_fortune(chart, diagnosis, chart_dict)
+
     return {
-        "chart": enrich_chart(chart.to_dict()),
+        "chart": chart_dict,
         "diagnosis": diagnosis.to_dict(),
         "diagnosis_summary": diagnosis.summary(),
         "arbitration": _arbitration_to_dict(arbitration),
     }
+
+
+def _attach_period_fortune(chart, diagnosis, chart_dict: dict[str, Any]) -> None:
+    """Annotate the current 大运/流年 with a deterministic 喜忌 verdict.
+
+    Derived from the chart's own 用神/格局 (子平真诠 论行运), so the responder
+    has a grounded good/bad judgment instead of guessing.
+    """
+    cp = chart.current_period
+    cp_dict = chart_dict.get("current_period")
+    if cp is None or not cp_dict:
+        return
+    yong_tg = diagnosis.yong_shen.ten_god
+    dm = chart.day_master
+    cp_dict["liunian_fortune"] = assess_pillar_fortune(dm, yong_tg, cp.liunian).to_dict()
+    if cp.luck_pillar is not None:
+        cp_dict["luck_fortune"] = assess_pillar_fortune(
+            dm, yong_tg, cp.luck_pillar.pillar
+        ).to_dict()
 
 
 def _resolve_arbitration(result: ArbitrationResult) -> ArbitrationResult:

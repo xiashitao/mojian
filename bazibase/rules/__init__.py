@@ -45,6 +45,11 @@ from .interactions import (
     HAI_TABLE,
     detect_interactions,
 )
+from .fortune import (
+    TenGodRole,
+    PillarFortune,
+    assess_pillar_fortune,
+)
 
 __all__ = [
     # schema
@@ -83,4 +88,8 @@ __all__ = [
     "ZI_XING_BRANCHES",
     "HAI_TABLE",
     "detect_interactions",
+    # fortune (大运/流年 喜忌)
+    "TenGodRole",
+    "PillarFortune",
+    "assess_pillar_fortune",
 ]

@@ -392,7 +392,21 @@ def _summarize_current_period(cp: dict[str, Any] | None) -> dict[str, Any] | Non
     else:
         # status == pre_luck / beyond_range
         summary["当前大运"] = "尚未起运" if cp.get("status") == "pre_luck" else "超出推算范围"
+    # Deterministic 喜忌 verdicts — the LLM must defer to these, not invent.
+    luck_fortune = _fortune_view(cp.get("luck_fortune"))
+    if luck_fortune:
+        summary["当前大运吉凶"] = luck_fortune
+    liunian_fortune = _fortune_view(cp.get("liunian_fortune"))
+    if liunian_fortune:
+        summary["今年流年吉凶"] = liunian_fortune
     return summary
+
+
+def _fortune_view(f: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Trim a PillarFortune dict to the verdict + reason the LLM must follow."""
+    if not f:
+        return None
+    return {"判定": f.get("verdict"), "依据": f.get("reason")}
 
 
 def _build_analysis_block(topic: Topic, context: dict[str, Any], *, clarify_previous: bool) -> dict[str, Any]:
@@ -433,6 +447,10 @@ def _build_stream_reply_prompt(
         "分析结果里的 current_period 是用户「当下所处的大运和今年流年」；"
         "当问题涉及近期、今年、当下时机或近几年走势时，要结合它来谈，"
         "但同样用日常语言，不要报出干支或十神这类术语。"
+        "其中「当前大运吉凶」「今年流年吉凶」是引擎按规则算出的判定（吉/凶/参半/平）；"
+        "你必须严格依据这个判定和它的「依据」来说这步运、这一年是顺还是不顺，"
+        "绝对不能自己改判或凭常识说成相反的好坏。判定为「参半」就要讲清两面、不要一边倒；"
+        "若没有给出吉凶判定，则不要对运势好坏下断语。"
         "不要提及具体流派名、古籍或后台规则，也不要堆砌命理术语。"
         "用日常语言展开，依次涵盖：直接结论、适配的条件或方向、需要注意的风险、一条可执行的建议。"
         "篇幅约300–500字，分2–4个自然段。"

@@ -54,6 +54,7 @@ from .rules import (
     LIU_CHONG_TABLE, XING_SAN_TYPES, XING_HU_TYPES,
     ZI_XING_BRANCHES, HAI_TABLE,
     detect_interactions,
+    TenGodRole, PillarFortune, assess_pillar_fortune,
 )
 
 # Layer 3 — LLM arbitration (v0.3.0+)
@@ -110,6 +111,7 @@ __all__ = [
     "LIU_CHONG_TABLE", "XING_SAN_TYPES", "XING_HU_TYPES",
     "ZI_XING_BRANCHES", "HAI_TABLE",
     "detect_interactions",
+    "TenGodRole", "PillarFortune", "assess_pillar_fortune",
     # Layer 3 — LLM arbitration (v0.3.0)
     "ArbitrationCase", "ArbitrationPrompt", "ArbitrationResponse",
     "ArbitrationResult", "ArbitrationParseError",
