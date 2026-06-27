@@ -44,10 +44,10 @@ function fireSideRibbons() {
 }
 
 const PLACEHOLDERS = [
-  "1990年5月15日，北京出生，男，事业方向怎么选？",
-  "我适合创业还是稳定上班？",
-  "下个月签约时机合适吗？",
-  "我的性格优势和短板是什么？",
+  "我的财富层次能到亿级吗？",
+  "我今年能遇到贵人吗？",
+  "我今年事业运会好吗？",
+  "我今年会有桃花运吗？",
 ];
 
 export default function LandingPage() {
