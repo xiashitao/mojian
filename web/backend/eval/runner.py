@@ -12,7 +12,9 @@ from typing import Any
 from bazibase import solar_ganzhi_year
 
 from web.backend.agent.models import ConversationState
-from web.backend.agent.responder import stream_consultation_reply, _summarize_current_period
+from web.backend.agent.responder import (
+    stream_consultation_reply, _summarize_current_period, _luck_sequence_view,
+)
 from web.backend.agent.tools import run_bazibase_tools
 from web.backend.eval.cases import EvalCase
 
@@ -46,6 +48,11 @@ def engine_facts(tool_result: dict[str, Any]) -> dict[str, Any]:
         "成败": (diag.get("cheng_bai") or {}).get("verdict"),
         # 当前大运/流年的事实(含 喜/忌/助用/增凶/平 角色标签) — 判忠诚度的关键。
         "当前大运流年": _summarize_current_period(chart.get("current_period")),
+        # The judge MUST see the same time-relevant facts the model saw, or it
+        # false-flags legitimate multi-year answers as "fabricated" (the chengdu
+        # bug): the model gets 大运走向 + 关键年份流年透视, so the judge needs them too.
+        "大运走向": _luck_sequence_view(chart),
+        "关键年份·流年透视": tool_result.get("timeline"),
     }
 
 
