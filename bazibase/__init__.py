@@ -29,6 +29,7 @@ from .ten_gods import TenGodLabels, label_ten_gods, StemTenGod, HiddenStemTenGod
 from .strength import StrengthAssessment, assess_strength
 from .solar_time import to_true_solar_time, equation_of_time_minutes
 from .dst import is_china_dst, to_standard_time, CHINA_DST_PERIODS
+from .changsheng import twelve_stage
 from .timeline import (
     PeriodResolution, resolve_period, liunian_pillar, solar_ganzhi_year,
     STATUS_PRE_LUCK, STATUS_ACTIVE, STATUS_BEYOND_RANGE,

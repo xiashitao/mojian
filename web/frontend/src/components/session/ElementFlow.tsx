@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import type { ElementWeight } from "../../types/session";
-import { elementClass } from "../../utils/ganzhi";
+import { elementNameClass } from "../../utils/ganzhi";
 
 /** 五行气势 bars laid out along the 相生 cycle (木→火→土→金→水). Bar height
  *  encodes each element's weight; the left-to-right read shows 气势流通. */
@@ -15,11 +15,11 @@ export function ElementFlow({ elements }: { elements: ElementWeight[] }) {
           <div className="el-flow__item">
             <span className="el-flow__track">
               <span
-                className={`el-flow__bar ${elementClass(e.el)}`}
+                className={`el-flow__bar ${elementNameClass(e.el)}`}
                 style={{ height: `${(e.count / max) * 100}%` }}
               />
             </span>
-            <span className={`el-flow__name ${elementClass(e.el)}`}>{e.el}</span>
+            <span className={`el-flow__name ${elementNameClass(e.el)}`}>{e.el}</span>
             <span className="el-flow__pct">{e.pct}%</span>
           </div>
         </Fragment>

@@ -66,6 +66,12 @@ export function elementClass(char: string): string {
   return el ? EL_CLASS[el] : "";
 }
 
+/** CSS class coloring a 五行 element NAME (木/火/土/金/水) directly — for views
+ *  that already hold the element, not a 干支 char (e.g. the 五行气势 bars). */
+export function elementNameClass(el: string): string {
+  return EL_CLASS[el] ?? "";
+}
+
 /** 流年 ten-gods for a year, relative to the day master. */
 export function liunianTenGods(dayMaster: string, year: number): {
   stem: string;

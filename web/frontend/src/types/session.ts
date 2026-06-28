@@ -18,6 +18,21 @@ export type ChartPillar = {
   nayin: string | null;
 };
 
+/** One column of the 专业细盘 grid (流年/大运/年/月/日/时). */
+export type ProColumn = {
+  label: string;
+  stem: string;
+  stem_ten_god: string | null;
+  branch: string;
+  hidden: HiddenStem[];
+  nayin: string | null;
+  void_branches: string[];
+  // Stage 2/3 enrichments (optional until wired):
+  star_luck?: string | null; // 星运 (日主十二长生 on this branch)
+  self_sit?: string | null; // 自坐 (this stem's 十二长生 on its own branch)
+  shensha?: string[]; // 精选神煞
+};
+
 export type ChartLuckPillar = {
   stem_branch: string;
   start_year: number;
@@ -26,6 +41,9 @@ export type ChartLuckPillar = {
   end_age: number;
   stem_ten_god?: string;
   branch_ten_god?: string;
+  // Full pro-grid columns for click-to-switch (this 大运 + each of its 流年).
+  column?: ProColumn;
+  years?: { year: number; column: ProColumn }[];
 };
 
 export type InteractionGroup = "合" | "冲" | "刑" | "害";
@@ -58,6 +76,7 @@ export type ChartData = {
   day_master: string;
   day_master_element: string;
   pillars: ChartPillar[];
+  columns?: ProColumn[];
   elements?: ElementWeight[];
   interactions?: ChartInteraction[];
   luck: { direction: string | null; pillars: ChartLuckPillar[] };

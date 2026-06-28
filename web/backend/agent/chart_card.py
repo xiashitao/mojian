@@ -7,7 +7,17 @@ from __future__ import annotations
 
 from typing import Any
 
+from bazibase import (
+    ten_god as compute_ten_god,
+    BRANCH_HIDDEN_STEMS,
+    twelve_stage,
+    liunian_pillar,
+)
+
 from .models import BirthInfo
+from ..services.nayin import get_nayin
+from ..services.kong_wang import get_kong_wang
+from ..services.shensha import pillar_shensha
 
 _PILLAR_KEYS = ("year", "month", "day", "hour")
 _POS_CN = {"year": "年", "month": "月", "day": "日", "hour": "时"}
@@ -67,6 +77,7 @@ def build_chart_card(
     ]
 
     luck = chart.get("luck") or {}
+    anchors = _anchors(chart)
     luck_pillars = [
         {
             "stem_branch": lp.get("stem_branch"),
@@ -76,6 +87,10 @@ def build_chart_card(
             "end_age": lp.get("end_age"),
             "stem_ten_god": lp.get("stem_ten_god"),
             "branch_ten_god": lp.get("branch_ten_god"),
+            # Full pro-grid columns for this 大运 and each of its 流年, so the
+            # 专业细盘 can re-point its 流年/大运 columns on click — no round-trip.
+            "column": _period_column(lp.get("stem_branch"), "大运", anchors),
+            "years": _luck_year_columns(lp, anchors),
         }
         for lp in luck.get("pillars", [])
     ]
@@ -99,6 +114,8 @@ def build_chart_card(
         "day_master": chart.get("day_master"),
         "day_master_element": chart.get("day_master_element"),
         "pillars": pillars,
+        # 专业细盘网格：流年 · 大运 · 年 · 月 · 日 · 时 并排成一张表。
+        "columns": _pro_columns(chart, current),
         "elements": _elements(chart),
         "interactions": _interactions(interactions),
         "luck": {"direction": luck.get("direction"), "pillars": luck_pillars},
@@ -109,6 +126,106 @@ def build_chart_card(
             "place": birth_info.birth_place,
             "gender": birth_info.gender,
         },
+    }
+
+
+def _anchors(chart: dict[str, Any]) -> tuple[str, str, str]:
+    """(日干, 年支, 日支) — the keys 主星/星运/神煞 derive from. 桃花/将星 anchor on
+    the 年支/日支."""
+    four_pillars = chart.get("four_pillars", {})
+    return (
+        chart.get("day_master") or "",
+        (four_pillars.get("year", {}).get("branch") or {}).get("char", ""),
+        (four_pillars.get("day", {}).get("branch") or {}).get("char", ""),
+    )
+
+
+def _luck_year_columns(lp: dict[str, Any], anchors: tuple[str, str, str]) -> list[dict[str, Any]]:
+    """Each 流年 in a 大运 span as {year, column}, for click-to-switch."""
+    start = lp.get("start_year")
+    end = lp.get("end_year")
+    if start is None or end is None:
+        return []
+    out: list[dict[str, Any]] = []
+    for y in range(int(start), int(end) + 1):
+        out.append({
+            "year": y,
+            "column": _period_column(liunian_pillar(y).stem_branch, "流年", anchors),
+        })
+    return out
+
+
+def _pro_columns(chart: dict[str, Any], current: dict[str, Any]) -> list[dict[str, Any]]:
+    """The 专业细盘 grid columns: 流年 · 大运 · 年 · 月 · 日 · 时, each a full pillar
+    with 主星/天干/地支/藏干/纳音/空亡. 流年+大运 use the *current* period so the
+    natal chart is read together with where the person stands now."""
+    four_pillars = chart.get("four_pillars", {})
+    anchors = _anchors(chart)
+    columns: list[dict[str, Any]] = []
+
+    # 流年 then 大运 (leftmost), so the present sits beside the natal four pillars.
+    liunian_sb = (current.get("liunian") or {}).get("stem_branch")
+    luck_sb = (current.get("luck_pillar") or {}).get("stem_branch")
+    for sb, label in ((liunian_sb, "流年"), (luck_sb, "大运")):
+        col = _period_column(sb, label, anchors)
+        if col:
+            columns.append(col)
+
+    for key in _PILLAR_KEYS:
+        if key in four_pillars:
+            columns.append(_natal_column(four_pillars[key], anchors))
+    return columns
+
+
+def _hidden_stems(branch: str, day_master: str) -> list[dict[str, Any]]:
+    return [
+        {"char": h, "ten_god": compute_ten_god(day_master, h)}
+        for h in BRANCH_HIDDEN_STEMS.get(branch, ())
+    ]
+
+
+def _period_column(
+    stem_branch: str | None, label: str, anchors: tuple[str, str, str]
+) -> dict[str, Any] | None:
+    """Build a full column for a 大运/流年 干支 (not in the natal four pillars)."""
+    if not stem_branch or len(stem_branch) < 2:
+        return None
+    day_master, year_branch, day_branch = anchors
+    stem, branch = stem_branch[0], stem_branch[1]
+    return {
+        "label": label,
+        "stem": stem,
+        "stem_ten_god": compute_ten_god(day_master, stem),
+        "branch": branch,
+        "hidden": _hidden_stems(branch, day_master),
+        "star_luck": twelve_stage(day_master, branch),  # 星运: 日主 on this branch
+        "self_sit": twelve_stage(stem, branch),  # 自坐: this stem on its own branch
+        "nayin": get_nayin(stem_branch),
+        "void_branches": list(get_kong_wang(stem_branch)),
+        "shensha": pillar_shensha(day_master, year_branch, day_branch, branch),
+    }
+
+
+def _natal_column(pillar: dict[str, Any], anchors: tuple[str, str, str]) -> dict[str, Any]:
+    day_master, year_branch, day_branch = anchors
+    stem = pillar.get("stem", {})
+    branch = pillar.get("branch", {})
+    stem_char = stem.get("char") or ""
+    branch_char = branch.get("char") or ""
+    return {
+        "label": pillar.get("name_cn"),
+        "stem": stem_char,
+        "stem_ten_god": stem.get("ten_god"),
+        "branch": branch_char,
+        "hidden": [
+            {"char": h.get("char"), "ten_god": h.get("ten_god"), "role": h.get("role")}
+            for h in branch.get("hidden_stems", [])
+        ],
+        "star_luck": twelve_stage(day_master, branch_char),
+        "self_sit": twelve_stage(stem_char, branch_char),
+        "nayin": pillar.get("nayin"),
+        "void_branches": pillar.get("void_branches") or [],
+        "shensha": pillar_shensha(day_master, year_branch, day_branch, branch_char),
     }
 
 

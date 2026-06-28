@@ -239,26 +239,48 @@
 }
 
 /* ── Full-chart detail modal ── */
+@keyframes detail-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 专业细盘以右侧抽屉呈现——密表 + 大运流年 + 刑冲 内容多，抽屉给整屏高度更从容。 */
+@keyframes detail-drawer-in {
+  from { transform: translateX(100%); }
+  to { transform: none; }
+}
+
 .detail-scrim {
   position: fixed;
   inset: 0;
   z-index: 100;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   background: rgba(0, 0, 0, 0.55);
-  padding: 20px;
+  animation: detail-scrim-in 160ms ease-out;
 }
 
 .detail-modal {
-  width: 100%;
-  max-width: 680px;
-  max-height: 86vh;
+  width: min(580px, 100vw);
+  height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--ink-900);
-  border: 1px solid var(--rule-line-bright);
-  border-radius: 16px;
+  border-left: 1px solid var(--rule-line-bright);
+  animation: detail-drawer-in 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* The dialog takes focus on open for keyboard/SR; don't paint a ring on the
+   whole box (the close button carries the visible focus affordance). */
+.detail-modal:focus {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detail-scrim,
+  .detail-modal {
+    animation: none;
+  }
 }
 
 .detail-modal__head {
@@ -278,18 +300,35 @@
 }
 
 .detail-modal__close {
-  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: -6px -6px -6px 0; /* enlarge the hit area without shifting the glyph */
   border: none;
+  border-radius: 8px;
+  background: transparent;
   color: var(--bone-400);
-  font-size: 16px;
+  font-size: 15px;
   cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease;
 }
 
 .detail-modal__close:hover {
   color: var(--cinnabar);
+  background: var(--ink-950);
+}
+
+.detail-modal__close:focus-visible {
+  outline: 2px solid rgba(237, 228, 204, 0.72);
+  outline-offset: 2px;
+  color: var(--bone-100);
 }
 
 .detail-modal__body {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 18px 20px;
 }
@@ -364,6 +403,168 @@
   color: var(--bone-500);
 }
 
+/* 专业细盘网格：流年 · 大运 · 年 · 月 · 日 · 时 */
+.prochart {
+  display: grid;
+  align-items: stretch;
+  font-family: var(--font-cn);
+  border: 1px solid var(--rule-line);
+  border-radius: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.prochart__cell,
+.prochart__rowlabel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--rule-line);
+  border-right: 1px solid var(--rule-line);
+  text-align: center;
+  min-width: 0;
+}
+
+/* Row labels: right-aligned, pinned left so they stay put on horizontal scroll. */
+.prochart__rowlabel {
+  align-items: flex-end;
+  padding-right: 9px;
+  font-size: 11px;
+  color: var(--bone-500);
+  background: var(--ink-950);
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+.prochart__rowlabel--head {
+  color: var(--bone-400);
+}
+
+/* The natal block opens with a brighter rule, splitting 流年·大运 (now) from 年月日时. */
+.prochart__cell.is-sep {
+  border-left: 1px solid var(--rule-line-bright);
+}
+
+/* 流年 / 大运 columns — a faint tint marks "where you stand now". */
+.prochart__cell.is-now {
+  background: var(--ink-950);
+}
+
+.prochart__head {
+  font-size: 11px;
+  color: var(--bone-400);
+  background: var(--ink-950);
+}
+
+.prochart__god {
+  font-size: 12px;
+  color: var(--bone-300);
+}
+
+.prochart__gz b {
+  font-family: var(--font-brand);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.prochart__hidden {
+  gap: 1px;
+  padding: 6px 3px;
+}
+
+.prochart__hid {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.prochart__hid b {
+  font-family: var(--font-brand);
+  font-size: 11px;
+}
+
+.prochart__hid i {
+  font-style: normal;
+  color: var(--bone-500);
+}
+
+.prochart__sub {
+  font-size: 11px;
+  color: var(--bone-400);
+}
+
+.prochart__shensha {
+  gap: 2px;
+  padding: 6px 3px;
+}
+
+.prochart__ss {
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--bronze); /* 神煞 in muted bronze — never red (素 rule) */
+}
+
+/* 五行之气 · 相生流通 — the element-colored 天干/地支 glow in 相生 order
+   (木→火→土→金→水, then loops), so a wave of 气 travels through the whole 命盘,
+   the 大运/流年 columns included. A missing/weak 五行 = a dim, skipped beat = 堵点.
+   Glow uses currentColor, so each element pulses in its own 五行 hue. */
+@keyframes qi-pulse {
+  0%, 24%, 100% {
+    text-shadow: none;
+    transform: scale(1);
+  }
+  9% {
+    text-shadow: 0 0 7px currentColor, 0 0 15px currentColor;
+    transform: scale(1.07);
+  }
+}
+
+.prochart__gz b {
+  display: inline-block;
+  will-change: transform;
+}
+
+.prochart__gz .el-wood {
+  animation: qi-pulse 5s ease-in-out infinite;
+  animation-delay: 0s;
+}
+.prochart__gz .el-fire {
+  animation: qi-pulse 5s ease-in-out infinite;
+  animation-delay: 1s;
+}
+.prochart__gz .el-earth {
+  animation: qi-pulse 5s ease-in-out infinite;
+  animation-delay: 2s;
+}
+.prochart__gz .el-metal {
+  animation: qi-pulse 5s ease-in-out infinite;
+  animation-delay: 3s;
+}
+.prochart__gz .el-water {
+  animation: qi-pulse 5s ease-in-out infinite;
+  animation-delay: 4s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prochart__gz .el-wood,
+  .prochart__gz .el-fire,
+  .prochart__gz .el-earth,
+  .prochart__gz .el-metal,
+  .prochart__gz .el-water {
+    animation: none;
+  }
+}
+
+.prochart-wrap {
+  position: relative;
+}
+
 /* 五行气势 · 相生流通 */
 .el-flow {
   display: flex;
@@ -434,16 +635,12 @@
   gap: 10px;
   padding: 8px 12px;
   border: 1px solid var(--rule-line);
-  border-left-width: 2px;
   border-radius: 8px;
   background: var(--ink-950);
 }
 
-.interaction.is-he { border-left-color: var(--jade); }
-.interaction.is-chong { border-left-color: var(--cinnabar); }
-.interaction.is-xing { border-left-color: var(--vermilion); }
-.interaction.is-hai { border-left-color: var(--bronze); }
-
+/* Type (合/冲/刑/害) is carried by the colored group glyph below — no colored
+   side-stripe (an impeccable absolute ban, and redundant with the glyph). */
 .interaction__group {
   flex-shrink: 0;
   width: 1.4em;
@@ -539,7 +736,7 @@
 
 .liunian-cell__tg {
   font-family: var(--font-cn);
-  font-size: 8px;
+  font-size: 9px;
   color: var(--bone-500);
   letter-spacing: -0.02em;
   text-align: center;
@@ -578,6 +775,46 @@
 
 .liunian-cell.is-now .liunian-cell__gz {
   color: var(--cinnabar);
+}
+
+/* 大运/流年 click-to-switch — clicking a 大运 or 流年 re-points the pro grid's
+   流年/大运 columns; the selection ring uses outline (not box-shadow → 无影-safe)
+   so it sits alongside the cinnabar 「now」 cue without clashing. */
+.dayun__head {
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 3px 5px;
+  margin: -3px -5px 5px;
+  transition: background-color 130ms ease;
+}
+
+.dayun__head:hover {
+  background: var(--rule-line);
+}
+
+.dayun__head:focus-visible,
+.liunian-cell:focus-visible {
+  outline: 2px solid rgba(237, 228, 204, 0.6);
+  outline-offset: 1px;
+}
+
+.dayun.is-selected {
+  outline: 2px solid var(--bone-400);
+  outline-offset: -1px;
+}
+
+.liunian-cell {
+  cursor: pointer;
+  transition: border-color 120ms ease;
+}
+
+.liunian-cell:hover {
+  border-color: var(--bone-400);
+}
+
+.liunian-cell.is-selected {
+  outline: 2px solid var(--bone-400);
+  outline-offset: -1px;
 }
 
 @media (max-width: 560px) {

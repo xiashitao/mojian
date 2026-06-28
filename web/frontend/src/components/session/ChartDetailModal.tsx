@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type { ChartData } from "../../types/session";
 import {
   elementClass,
@@ -6,8 +7,8 @@ import {
   yearRange,
 } from "../../utils/ganzhi";
 import { Ganzhi } from "./Ganzhi";
-import { ElementFlow } from "./ElementFlow";
 import { Interactions } from "./Interactions";
+import { ProChartGrid } from "./ProChartGrid";
 
 interface Props {
   chart: ChartData;
@@ -18,10 +19,70 @@ interface Props {
 export function ChartDetailModal({ chart, onClose }: Props) {
   const currentYear = chart.current?.year;
   const currentLuck = chart.current?.luck_index;
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // The pro grid's 流年/大运 columns follow a selected period (defaults to now).
+  // Clicking a 大运 or 流年 in the timeline re-points them; the natal 4 stay put.
+  const luckPillars = chart.luck.pillars;
+  const [selLuckIdx, setSelLuckIdx] = useState(currentLuck ? currentLuck - 1 : 0);
+  const [selYear, setSelYear] = useState<number | undefined>(currentYear);
+
+  const selLuck = luckPillars[selLuckIdx];
+  const selLiunianCol = selLuck?.years?.find((y) => y.year === selYear)?.column;
+  const selLuckCol = selLuck?.column;
+  const natalCols = chart.columns?.slice(2) ?? [];
+  const gridColumns =
+    selLiunianCol && selLuckCol
+      ? [selLiunianCol, selLuckCol, ...natalCols]
+      : chart.columns ?? [];
+
+  const selectLuck = (i: number) => {
+    setSelLuckIdx(i);
+    const lp = luckPillars[i];
+    // Keep the year if it falls inside this 大运, else jump to its first 流年.
+    if (!lp || selYear === undefined || selYear < lp.start_year || selYear > lp.end_year) {
+      setSelYear(lp?.start_year);
+    }
+  };
+  const selectYear = (i: number, y: number) => {
+    setSelLuckIdx(i);
+    setSelYear(y);
+  };
+  const onActivate = (fn: () => void) => (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      fn();
+    }
+  };
+
+  // Mirror the AuthModal conventions: Escape closes, the dialog takes focus on
+  // open (so keyboard + screen readers land inside it), and the page behind is
+  // scroll-locked while it's up.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    dialogRef.current?.focus();
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [onClose]);
 
   return (
     <div className="detail-scrim" onClick={onClose}>
-      <div className="detail-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="detail-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="完整命盘"
+        tabIndex={-1}
+        ref={dialogRef}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="detail-modal__head">
           <span className="detail-modal__title">完整命盘</span>
           <button
@@ -36,7 +97,12 @@ export function ChartDetailModal({ chart, onClose }: Props) {
 
         <div className="detail-modal__body">
           <section className="detail-section">
-            <h4 className="detail-section__h">八字</h4>
+            <h4 className="detail-section__h">命盘 · 流年大运并参</h4>
+            {chart.columns && chart.columns.length > 0 ? (
+              <div className="prochart-wrap">
+                <ProChartGrid columns={gridColumns} gender={chart.birth?.gender} />
+              </div>
+            ) : (
             <div className="detail-bazi">
               {chart.pillars.map((p) => (
                 <div
@@ -65,18 +131,7 @@ export function ChartDetailModal({ chart, onClose }: Props) {
                 </div>
               ))}
             </div>
-          </section>
-
-          {chart.elements && chart.elements.length > 0 && (
-            <section className="detail-section">
-              <h4 className="detail-section__h">五行气势 · 相生流通</h4>
-              <ElementFlow elements={chart.elements} />
-            </section>
-          )}
-
-          <section className="detail-section">
-            <h4 className="detail-section__h">刑冲合害</h4>
-            <Interactions interactions={chart.interactions ?? []} />
+            )}
           </section>
 
           <section className="detail-section">
@@ -88,9 +143,18 @@ export function ChartDetailModal({ chart, onClose }: Props) {
               {chart.luck.pillars.map((lp, i) => (
                 <div
                   key={`${lp.stem_branch}-${lp.start_year}`}
-                  className={`dayun ${currentLuck === i + 1 ? "is-current" : ""}`}
+                  className={`dayun ${currentLuck === i + 1 ? "is-current" : ""} ${
+                    i === selLuckIdx ? "is-selected" : ""
+                  }`}
                 >
-                  <div className="dayun__head">
+                  <div
+                    className="dayun__head"
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={i === selLuckIdx}
+                    onClick={() => selectLuck(i)}
+                    onKeyDown={onActivate(() => selectLuck(i))}
+                  >
                     <span className="dayun__gz">
                       <Ganzhi gz={lp.stem_branch} />
                     </span>
@@ -106,10 +170,18 @@ export function ChartDetailModal({ chart, onClose }: Props) {
                   <div className="dayun__years">
                     {yearRange(lp.start_year, lp.end_year).map((y) => {
                       const tg = liunianTenGods(chart.day_master, y);
+                      const isSel = i === selLuckIdx && y === selYear;
                       return (
                         <span
                           key={y}
-                          className={`liunian-cell ${y === currentYear ? "is-now" : ""}`}
+                          className={`liunian-cell ${y === currentYear ? "is-now" : ""} ${
+                            isSel ? "is-selected" : ""
+                          }`}
+                          role="button"
+                          tabIndex={0}
+                          aria-pressed={isSel}
+                          onClick={() => selectYear(i, y)}
+                          onKeyDown={onActivate(() => selectYear(i, y))}
                         >
                           <span className="liunian-cell__y">{y}</span>
                           <span className="liunian-cell__gz">
@@ -125,6 +197,11 @@ export function ChartDetailModal({ chart, onClose }: Props) {
                 </div>
               ))}
             </div>
+          </section>
+
+          <section className="detail-section">
+            <h4 className="detail-section__h">刑冲合害</h4>
+            <Interactions interactions={chart.interactions ?? []} />
           </section>
         </div>
       </div>
