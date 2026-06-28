@@ -11,9 +11,17 @@ from typing import Any
 _ROLE_CN = {"user": "用户", "assistant": "助手"}
 
 # Char budgets — Chinese text is roughly a couple of characters per token.
-HISTORY_MAX_TURNS = 6
-HISTORY_CHAR_BUDGET = 1400
-HISTORY_TURN_CHAR_CAP = 200
+# Loosened from 6/1400 now that the big analysis block is prefix-cached, so the
+# variable history is the marginal cost and a wider window is cheap.
+HISTORY_MAX_TURNS = 8
+HISTORY_CHAR_BUDGET = 2000
+# The last few turns stay (near-)verbatim; older assistant turns compress to
+# their one-line 结论 (which reflect_on_reply already produced) instead of being
+# blindly truncated mid-sentence — a 300–500 字 reply cut to ~200 lost exactly
+# the conclusions the model needs to avoid repeating itself.
+HISTORY_RECENT_FULL = 2
+HISTORY_FULL_CAP = 360   # recent turns — room for a whole assistant reply
+HISTORY_OLD_CAP = 160    # older turns with no 结论 to fall back on
 NOTES_MAX = 4
 NOTES_CHAR_BUDGET = 600
 
@@ -27,24 +35,41 @@ def topic_cn(topic: str | None) -> str:
     }.get(topic or "career", "这个问题")
 
 
+def _render_turn(msg: dict[str, Any], *, full: bool) -> str:
+    content = str(msg.get("content", "")).strip()
+    if not content:
+        return ""
+    # Older assistant turns: prefer the stored one-line 结论 over a blind cut.
+    if not full and str(msg.get("role")) == "assistant":
+        conclusion = str(msg.get("conclusion", "")).strip()
+        if conclusion:
+            content = conclusion
+    cap = HISTORY_FULL_CAP if full else HISTORY_OLD_CAP
+    if len(content) > cap:
+        content = content[:cap] + "…"
+    role = _ROLE_CN.get(str(msg.get("role")), str(msg.get("role")))
+    return f"{role}：{content}"
+
+
 def render_history(
     history: list[dict[str, Any]] | None,
     *,
     max_turns: int = HISTORY_MAX_TURNS,
     char_budget: int = HISTORY_CHAR_BUDGET,
 ) -> str:
-    """Most recent turns within a char budget; oldest dropped first to fit."""
+    """Recent turns within a char budget; oldest dropped first to fit. The last
+    HISTORY_RECENT_FULL turns are kept (near-)verbatim; older assistant turns
+    collapse to their 结论 so meaning survives the budget instead of a mid-cut."""
     if not history:
         return ""
+    window = history[-max_turns:]
+    n = len(window)
     lines: list[str] = []
-    for msg in history[-max_turns:]:
-        content = str(msg.get("content", "")).strip()
-        if not content:
-            continue
-        if len(content) > HISTORY_TURN_CHAR_CAP:
-            content = content[:HISTORY_TURN_CHAR_CAP] + "…"
-        role = _ROLE_CN.get(str(msg.get("role")), str(msg.get("role")))
-        lines.append(f"{role}：{content}")
+    for i, msg in enumerate(window):
+        full = i >= n - HISTORY_RECENT_FULL
+        line = _render_turn(msg, full=full)
+        if line:
+            lines.append(line)
     while len(lines) > 1 and sum(len(x) for x in lines) > char_budget:
         lines.pop(0)
     return "\n".join(lines)

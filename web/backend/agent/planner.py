@@ -69,6 +69,7 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
     reply_parts: list[str] = []
     chat_state = ChatState(topic=None, needs_more_info=False, missing_fields=[], suggested_followups=[])
     chart_card_payload: dict[str, Any] | None = None
+    conclusion: str = ""  # one-line takeaway of this turn, stored on the message
 
     try:
         state = _load_state(conv_id)
@@ -210,6 +211,8 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
         metadata = chat_state.model_dump()
         if chart_card_payload:
             metadata["chart"] = chart_card_payload  # so the card survives reload
+        if conclusion:
+            metadata["conclusion"] = conclusion  # so render_history can compress older turns
         assistant_message = repository.add_message(
             conv_id, "assistant", full_reply,
             analysis_id=analysis_id, metadata=metadata,
@@ -259,12 +262,28 @@ def _load_state(conversation_id: str) -> ConversationState:
 
 
 def _prior_messages(conversation_id: str, current_message_id: str) -> list[dict[str, Any]]:
-    """Persisted turns before the current user message (for follow-up context)."""
-    return [
-        m
-        for m in repository.get_conversation_messages(conversation_id)
-        if m["id"] != current_message_id
-    ]
+    """Persisted turns before the current user message (for follow-up context).
+
+    Surfaces each assistant turn's stored 结论 as a clean `conclusion` field, so
+    `render_history` can compress older turns to it instead of truncating."""
+    out: list[dict[str, Any]] = []
+    for m in repository.get_conversation_messages(conversation_id):
+        if m["id"] == current_message_id:
+            continue
+        concl = _stored_conclusion(m)
+        out.append({**m, "conclusion": concl} if concl else m)
+    return out
+
+
+def _stored_conclusion(message: dict[str, Any]) -> str:
+    raw = message.get("metadata_json")
+    if not raw:
+        return ""
+    try:
+        meta = json.loads(raw) if isinstance(raw, str) else raw
+    except (ValueError, TypeError):
+        return ""
+    return str((meta or {}).get("conclusion", "")).strip()
 
 
 def _build_topic_question() -> tuple[str, ChatState]:
