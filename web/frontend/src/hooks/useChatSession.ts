@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AuthRequiredError, sendChatMessage } from "../api/chatApi";
 import { getConversation } from "../api/conversationApi";
 import { useAuth } from "../auth";
+import { uuid } from "../utils/anonId";
 import type { ChatState, Topic } from "../types/api";
 import type {
   BirthInfo,
@@ -132,8 +133,8 @@ export function useChatSession() {
       //   return;
       // }
 
-      const userId = `local-${crypto.randomUUID()}`;
-      const pendingId = `pending-${crypto.randomUUID()}`;
+      const userId = `local-${uuid()}`;
+      const pendingId = `pending-${uuid()}`;
       const now = new Date().toISOString();
       const controller = new AbortController();
       abortRef.current = controller;
