@@ -1,0 +1,15 @@
+# 选项 C：无域名、HTTP、跑在 :8888。追加到 /etc/caddy/Caddyfile 末尾即可，
+# 与现有站点(icqapi 那些)并存、互不影响。访问 http://<服务器IP>:8888
+# 注意：dist 路径按 /root/kairos clone 位置硬编码；换目录记得改。
+:8888 {
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8010 {
+			flush_interval -1
+		}
+	}
+	handle {
+		root * /root/kairos/web/frontend/dist
+		try_files {path} /index.html
+		file_server
+	}
+}
