@@ -110,15 +110,28 @@ export default function LandingPage() {
       return;
     }
 
-    let armed = true; // fire once per arrival; re-arm after scrolling away
+    // First-arrival delight only, per session: confetti fires once when the
+    // user first reaches the finale, then not again this session (sessionStorage
+    // clears on tab close, so a fresh visit counts as a new first arrival).
+    const SEEN_KEY = "kairos_finale_confetti";
+    try {
+      if (sessionStorage.getItem(SEEN_KEY) === "1") return;
+    } catch {
+      // sessionStorage unavailable (e.g. private mode) — fall through, fire once this load.
+    }
+
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
-          if (e.isIntersecting && armed) {
-            armed = false;
+          if (e.isIntersecting) {
             fireSideRibbons();
-          } else if (!e.isIntersecting) {
-            armed = true;
+            try {
+              sessionStorage.setItem(SEEN_KEY, "1");
+            } catch {
+              /* ignore */
+            }
+            io.disconnect(); // fire exactly once, ever
+            break;
           }
         }
       },
