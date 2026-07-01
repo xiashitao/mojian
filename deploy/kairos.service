@@ -1,0 +1,22 @@
+# systemd 守护 FastAPI 后端（绑 127.0.0.1，只让 Caddy 反代）。
+# 把 <REPO> 换成仓库绝对路径、<USER> 换成运行用户（建议非 root，如部署账号）。
+# 装到 /etc/systemd/system/kairos.service → daemon-reload → enable --now kairos
+
+[Unit]
+Description=Kairos FastAPI backend (uvicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=<USER>
+WorkingDirectory=<REPO>/web
+# config.py 自己从 web/.env 读配置；这里无需 EnvironmentFile
+ExecStart=<REPO>/web/.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8010
+Restart=always
+RestartSec=3
+# 基础加固
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,21 @@
+# Caddy — 同源反代 + 自动 HTTPS（Let's Encrypt）。
+# 把 <SUB> 换成你的 DuckDNS 子域名，<REPO> 换成仓库在服务器上的绝对路径。
+# 装到 /etc/caddy/Caddyfile 后 `sudo systemctl reload caddy`。
+
+<SUB>.duckdns.org {
+	encode gzip
+
+	# /api/* → FastAPI 后端。flush_interval -1 关闭缓冲，让聊天的流式 token 实时吐出。
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8010 {
+			flush_interval -1
+		}
+	}
+
+	# 其余 → 前端构建产物；SPA 路由回落到 index.html
+	handle {
+		root * <REPO>/web/frontend/dist
+		try_files {path} /index.html
+		file_server
+	}
+}
