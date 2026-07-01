@@ -19,6 +19,17 @@ _CREATE_USERS_INDEX = (
     "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
 )
 
+# 邮箱登录验证码（每邮箱一条活跃记录，新发即覆盖）。
+_CREATE_EMAIL_CODES = """
+CREATE TABLE IF NOT EXISTS email_codes (
+    email       TEXT PRIMARY KEY,
+    code        TEXT NOT NULL,
+    expires_at  TEXT NOT NULL,
+    attempts    INTEGER NOT NULL DEFAULT 0,
+    sent_at     TEXT NOT NULL DEFAULT (datetime('now'))
+)
+"""
+
 _CREATE_SAVED_CHARTS = """
 CREATE TABLE IF NOT EXISTS saved_charts (
     id          TEXT PRIMARY KEY,
@@ -142,6 +153,7 @@ def init_db():
     conn = get_db()
     try:
         conn.execute(_CREATE_USERS)
+        conn.execute(_CREATE_EMAIL_CODES)
         conn.execute(_CREATE_SAVED_CHARTS)
         conn.execute(_CREATE_USER_MEMORY)
         conn.execute(_CREATE_USER_MEMORY_NOTES)

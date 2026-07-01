@@ -1,7 +1,10 @@
 """Auth routes: register, login, logout, me."""
 from __future__ import annotations
 
+import secrets
 import uuid
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, EmailStr, Field
 
@@ -14,7 +17,9 @@ from ..auth import (
     set_auth_cookie,
     verify_password,
 )
+from ..config import settings
 from ..database import get_db
+from ..services.email import send_login_code
 
 router = APIRouter(prefix="/auth")
 
@@ -108,6 +113,113 @@ def login(req: LoginRequest, response: Response):
     set_auth_cookie(response, create_token(row["id"], row["role"]))
     return UserOut(id=row["id"], email=row["email"],
                    name=row["name"], role=row["role"])
+
+
+# ── 邮箱验证码登录（OTP，免密码）──────────────────────────────────────────────
+class SendCodeRequest(BaseModel):
+    email: EmailStr
+
+
+class VerifyCodeRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(..., min_length=4, max_length=8)
+    anon_id: str | None = None
+
+
+def _parse_dt(s: str | None) -> datetime | None:
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(s)
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+@router.post("/email/send-code")
+def send_email_code(req: SendCodeRequest):
+    """生成 6 位验证码、存库、发送。同一邮箱有重发冷却，防刷。"""
+    email = req.email.lower()
+    now = datetime.now(timezone.utc)
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT sent_at FROM email_codes WHERE email = ?", (email,)
+        ).fetchone()
+        if row:
+            sent_at = _parse_dt(row["sent_at"])
+            if sent_at and (now - sent_at).total_seconds() < settings.otp_resend_seconds:
+                raise HTTPException(status_code=429, detail="发送太频繁，请稍后再试")
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        expires = now + timedelta(seconds=settings.otp_ttl_seconds)
+        conn.execute(
+            """INSERT INTO email_codes (email, code, expires_at, attempts, sent_at)
+               VALUES (?, ?, ?, 0, ?)
+               ON CONFLICT(email) DO UPDATE SET
+                 code=excluded.code, expires_at=excluded.expires_at,
+                 attempts=0, sent_at=excluded.sent_at""",
+            (email, code, expires.isoformat(), now.isoformat()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    try:
+        send_login_code(email, code)
+    except Exception:
+        raise HTTPException(status_code=502, detail="验证码发送失败，请稍后再试")
+    return {"ok": True, "resend_after": settings.otp_resend_seconds}
+
+
+@router.post("/email/verify", response_model=UserOut)
+def verify_email_code(req: VerifyCodeRequest, response: Response):
+    """校验验证码；通过则建/取用户并下发登录 cookie。"""
+    email = req.email.lower()
+    now = datetime.now(timezone.utc)
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT code, expires_at, attempts FROM email_codes WHERE email = ?", (email,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=400, detail="请先获取验证码")
+        expires = _parse_dt(row["expires_at"])
+        if not expires or now > expires:
+            conn.execute("DELETE FROM email_codes WHERE email = ?", (email,))
+            conn.commit()
+            raise HTTPException(status_code=400, detail="验证码已过期，请重新获取")
+        if row["attempts"] >= settings.otp_max_attempts:
+            conn.execute("DELETE FROM email_codes WHERE email = ?", (email,))
+            conn.commit()
+            raise HTTPException(status_code=429, detail="尝试次数过多，请重新获取验证码")
+        if req.code.strip() != row["code"]:
+            conn.execute(
+                "UPDATE email_codes SET attempts = attempts + 1 WHERE email = ?", (email,)
+            )
+            conn.commit()
+            raise HTTPException(status_code=400, detail="验证码不正确")
+
+        # 通过：作废验证码，建或取用户。
+        conn.execute("DELETE FROM email_codes WHERE email = ?", (email,))
+        existing = conn.execute(
+            "SELECT id, name, role FROM users WHERE email = ?", (email,)
+        ).fetchone()
+        if existing:
+            user_id, name, role = existing["id"], existing["name"], existing["role"]
+        else:
+            user_id, name, role = str(uuid.uuid4()), "", "user"
+            # OTP 用户无密码：塞一个随机不可用 hash，密码登录永远进不去。
+            conn.execute(
+                "INSERT INTO users (id, email, password_hash, name) VALUES (?, ?, ?, ?)",
+                (user_id, email, hash_password(secrets.token_urlsafe(24)), name),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    migrate_anonymous(req.anon_id, user_id)
+    set_auth_cookie(response, create_token(user_id, role))
+    return UserOut(id=user_id, email=email, name=name, role=role)
 
 
 @router.post("/logout")

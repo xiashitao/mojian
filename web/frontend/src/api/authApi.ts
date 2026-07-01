@@ -36,6 +36,18 @@ export function login(email: string, password: string): Promise<AuthUser> {
   return post<AuthUser>("/login", { email, password, anon_id: getAnonId() });
 }
 
+/** Send a login verification code to the email (OTP flow). */
+export function sendEmailCode(
+  email: string,
+): Promise<{ ok: boolean; resend_after: number }> {
+  return post("/email/send-code", { email });
+}
+
+/** Verify the code; on success the session cookie is set and the user returned. */
+export function verifyEmailCode(email: string, code: string): Promise<AuthUser> {
+  return post<AuthUser>("/email/verify", { email, code, anon_id: getAnonId() });
+}
+
 export function logout(): Promise<{ ok: boolean }> {
   return post<{ ok: boolean }>("/logout", {});
 }

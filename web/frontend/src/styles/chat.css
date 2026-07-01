@@ -285,6 +285,47 @@
   text-align: center;
 }
 
+/* 验证码登录：标题 + 换邮箱/重新发送 链接行 */
+.auth-modal__title {
+  margin: 0 0 14px;
+  font-family: var(--font-brand);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--bone-100);
+  letter-spacing: 0.04em;
+}
+
+.auth-otp-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.auth-linkbtn {
+  padding: 4px 2px;
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: var(--bone-400);
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.auth-linkbtn:hover:not(:disabled) {
+  color: var(--bone-100);
+}
+
+.auth-linkbtn:disabled {
+  color: var(--bone-500);
+  cursor: default;
+}
+
+.auth-linkbtn:focus-visible {
+  outline: 2px solid rgba(237, 228, 204, 0.72);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 /* ── Context strip (relocated topic / birth from the old rail) ── */
 .chat-context {
   display: flex;

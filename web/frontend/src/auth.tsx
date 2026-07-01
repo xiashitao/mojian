@@ -12,6 +12,7 @@ import {
   login as apiLogin,
   logout as apiLogout,
   register as apiRegister,
+  verifyEmailCode as apiVerifyEmailCode,
   type AuthUser,
 } from "./api/authApi";
 
@@ -20,6 +21,7 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
+  loginWithCode: (email: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -50,14 +52,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const loginWithCode = useCallback(async (email: string, code: string) => {
+    await apiVerifyEmailCode(email, code);
+    window.location.reload();
+  }, []);
+
   const logout = useCallback(async () => {
     await apiLogout();
     window.location.reload();
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, login, register, logout }),
-    [user, loading, login, register, logout],
+    () => ({ user, loading, login, register, loginWithCode, logout }),
+    [user, loading, login, register, loginWithCode, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
