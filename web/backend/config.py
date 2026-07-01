@@ -33,17 +33,24 @@ class Settings(BaseSettings):
     cookie_secure: bool = True  # set False in local dev (.env: COOKIE_SECURE=false)
 
     # 邮箱验证码登录（OTP）
-    email_provider: str = "log"  # log(开发：打印到日志) | smtp(生产)
+    # log(开发：打印到日志) | smtp(通用 SMTP) | tencent(腾讯云邮件推送 API)
+    # 注意：2026-03-02 起腾讯云对新开通的个人实名用户关闭 SMTP，只能走 tencent(API)。
+    email_provider: str = "log"
     email_from: str = "Kairos <noreply@example.com>"
     otp_ttl_seconds: int = 600  # 验证码有效期（默认 10 分钟）
     otp_resend_seconds: int = 60  # 同一邮箱重发冷却
     otp_max_attempts: int = 5  # 单个码最多验证次数
-    # SMTP（email_provider=smtp 时用；腾讯云邮件推送提供 SMTP 接入）
+    # SMTP（email_provider=smtp 时用；老账号/企业账号的腾讯云可走 SMTP）
     smtp_host: str = ""
     smtp_port: int = 465
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_ssl: bool = True
+    # 腾讯云邮件推送 API（email_provider=tencent 时用）。个人新账号只能走这条。
+    tencent_secret_id: str = ""  # 访问管理(CAM)里的 SecretId
+    tencent_secret_key: str = ""  # 对应 SecretKey（机密，只填服务器 .env）
+    tencent_ses_region: str = "ap-guangzhou"  # ap-guangzhou | ap-hongkong
+    tencent_template_id: int = 0  # 审核通过的邮件模板 ID（正文含 {{code}}）
 
     class Config:
         env_file = str(WEB_DIR / ".env")
