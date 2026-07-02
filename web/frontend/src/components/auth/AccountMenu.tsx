@@ -8,16 +8,21 @@ export function AccountMenu() {
   const { user, loading, logout } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
-  // Close the dropdown on outside click / Escape.
+  // Close the dropdown on outside click / Escape (Escape returns focus to trigger).
   useEffect(() => {
     if (!menuOpen) return;
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setMenuOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenuOpen(false);
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        triggerRef.current?.focus();
+      }
     };
     window.addEventListener("mousedown", onDown);
     window.addEventListener("keydown", onKey);
@@ -26,6 +31,17 @@ export function AccountMenu() {
       window.removeEventListener("keydown", onKey);
     };
   }, [menuOpen]);
+
+  // Guard against double-submit; re-enable only on failure (success unmounts this branch).
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await logout();
+    } catch {
+      setLoggingOut(false);
+    }
+  };
 
   if (loading) return null;
 
@@ -38,6 +54,7 @@ export function AccountMenu() {
         onMouseLeave={() => setMenuOpen(false)}
       >
         <button
+          ref={triggerRef}
           type="button"
           className="account__trigger"
           onClick={() => setMenuOpen((o) => !o)}
@@ -53,9 +70,10 @@ export function AccountMenu() {
               type="button"
               className="account__dropdown-item"
               role="menuitem"
-              onClick={() => void logout()}
+              disabled={loggingOut}
+              onClick={() => void handleLogout()}
             >
-              退出登录
+              {loggingOut ? "退出中…" : "退出登录"}
             </button>
           </div>
         )}

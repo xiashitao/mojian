@@ -184,22 +184,38 @@
   transition: color 0.15s, background 0.15s;
 }
 
-.account__dropdown-item:hover {
+.account__dropdown-item:hover,
+.account__dropdown-item:focus-visible {
   color: var(--cinnabar);
-  background: var(--ink-850);
+  background: var(--ink-800);
 }
 
-[data-theme="light"] .account__dropdown {
-  background: var(--bone-100);
+/* 键盘焦点环 — 复用系统强调色，inset 以适配紧凑浮层不被裁切 */
+.account__dropdown-item:focus-visible {
+  outline: 2px solid var(--cinnabar);
+  outline-offset: -2px;
 }
 
-[data-theme="light"] .account__dropdown-item:hover {
-  background: var(--bone-200);
+.account__dropdown-item:active {
+  background: var(--ink-700);
+}
+
+/* 退出请求进行中：降对比、去除 hover/press 反馈 */
+.account__dropdown-item:disabled {
+  color: var(--bone-500);
+  background: transparent;
+  cursor: default;
 }
 
 @keyframes account-menu-in {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account__dropdown {
+    animation: none;
+  }
 }
 
 @keyframes auth-scrim-in {
