@@ -57,11 +57,18 @@ typography:
     lineHeight: 1.08
     letterSpacing: "0.10em"
 rounded:
-  sm: "2px"
-  md: "6px"
-  lg: "8px"
-  xl: "12px"
-  full: "50%"
+  # 以代码为准的真实圆角阶梯（软圆角系统，非「几乎为直角」）
+  hairline: "2px"   # 细条 / 滚动条 / 极小指示（strength-track、legend-bar、popover option）
+  xs: "3px"         # 标签 chip / tag（god-chip、case-status、response-rule-chip）
+  sm: "4px"         # 小按钮 / 次级控件（.btn、theme-toggle、workbench input）
+  md: "6px"         # 常规按钮 / 导航项 / 小卡（oracle-chip、nav、case-card、liunian-cell）
+  lg: "8px"         # 卡片 / 面板 / 输入条（.card、rail-card、input-bar、tone-popover）
+  xl: "10px"        # 表单输入 / 主按钮 / 命盘数据块（auth-input、auth-submit、bazi-col、dayun）
+  "2xl": "12px"     # 落地页输入 / 演示气泡（landing__composer、demo__bubble）
+  "3xl": "14px"     # 大卡片 / hero 卡（welcome__card、chart-card__capture、demo）
+  modal: "16px"     # 模态框（auth-modal）
+  bubble: "22px"    # 消息气泡 / composer 输入舱（message body、composer__box；气泡带一角切角）
+  full: "999px"     # 药丸按钮 / 圆点 / 头像（另有 50% 用于正圆）
 spacing:
   xs: "6px"
   sm: "10px"
@@ -72,27 +79,27 @@ components:
   button-primary-dark:
     backgroundColor: "{colors.cinnabar}"
     textColor: "{colors.bone-100}"
-    rounded: "{rounded.sm}"
-    padding: "7px 24px"
+    rounded: "{rounded.xl}"
+    padding: "11px 24px"
   button-primary-dark-hover:
     backgroundColor: "{colors.vermilion}"
     textColor: "{colors.bone-100}"
   button-primary-light:
     backgroundColor: "{colors.light-bone-200}"
     textColor: "{colors.light-ink-950}"
-    rounded: "{rounded.sm}"
-    padding: "7px 24px"
+    rounded: "{rounded.xl}"
+    padding: "11px 24px"
   button-primary-light-hover:
     backgroundColor: "{colors.light-bone-100}"
     textColor: "{colors.light-ink-950}"
   input-default:
     backgroundColor: "{colors.ink-900}"
     textColor: "{colors.bone-200}"
-    rounded: "{rounded.sm}"
-    padding: "12px 16px"
+    rounded: "{rounded.xl}"
+    padding: "11px 14px"
   card-rail:
     backgroundColor: "{colors.ink-850}"
-    rounded: "{rounded.sm}"
+    rounded: "{rounded.lg}"
     padding: "14px 16px"
 ---
 
@@ -157,7 +164,9 @@ components:
 
 ### Named Rules
 
-**The 一字一体 Rule.** 同一个界面元素只用一种字体。不在按钮里混入衬线，不在 label 里混入 body 字体。Serif 只在品牌标识和 Display 级标题出现。
+**The 一字一体 Rule.** 同一个界面元素只用一种字体，不在一个元素内混排（不在按钮里混入衬线，不在 label 里混入 body 字体）。
+
+衬线（Noto Serif SC，`--font-brand`）的适用范围以代码为准，包括三类：① 品牌标识与 Display 级标题（landing「墨鉴」）；② **各级标题**——卡片标题、模态框标题、欢迎标题等（`.chart-card__title`、`.detail-modal__title`、`.auth-modal__title`、`.welcome__title`）；③ **天干地支等命理字符**，借衬线传递书卷字形（`.bazi-col__branch`、`.dayun__gz`、`.liunian__gz` 等）。正文、标签、hint、按钮文字、输入框一律用 Inter（`--font-cn`）。
 
 ## 4. Elevation
 
@@ -175,7 +184,7 @@ components:
 
 ### Buttons
 
-- **Shape:** 微圆角（2px），几乎为直角。克制、不柔软。
+- **Shape:** 软圆角系统。主操作 / 表单按钮 10px（`rounded.xl`，如发送、验证码提交），常规按钮 / 导航项 6px（`rounded.md`），次级 / 小按钮 4px（`rounded.sm`，如 `.btn`、主题切换）。药丸按钮用 999px。整体偏圆润克制，不是「几乎为直角」。
 - **Primary (dark):** cinnabar `#c64d3f` 底，bone-100 文字。Hover 升为 vermilion `#d85f4d`，translateY(-1px)。
 - **Primary (light):** bone-200 `#3d3632` 底，ink-950 `#fbf7ef` 文字。Hover 加深至 bone-100 `#2c2622`。无红色。
 - **Disabled:** 透明底，rule-line-bright 边框，bone-500 文字。两套主题一致。
@@ -189,14 +198,14 @@ components:
 
 ### Chips (Follow-up / Rail)
 
-- **Style:** 透明底，1px rule-line-bright 边框，bone-300 文字，2px 圆角。
+- **Style:** 透明底，1px rule-line-bright 边框，bone-300 文字。圆角 3px（tag/chip，`rounded.xs`）～ 6px（follow-up chip 如 `.oracle-chip`，`rounded.md`）。
 - **Hover (dark):** 边框变 cinnabar，文字变 cinnabar。
 - **Hover (light):** 边框变 bone-300，文字变 bone-200，微背景色。
 - **Disabled:** opacity 0.4。
 
 ### Cards / Rail Cards
 
-- **Corner Style:** 2px 圆角。
+- **Corner Style:** 卡片 / 面板 8px（`rounded.lg`，如 `.card`、`.rail-card`）；大卡片 / hero 卡 14px（`rounded.3xl`，如 `.welcome__card`）；命盘数据块 10px（`rounded.xl`，如 `.bazi-col`、`.dayun`）。
 - **Background:** ink-850（与主内容区同色，靠边框区隔）。
 - **Border:** 1px solid rule-line。
 - **Birth info card:** 使用 bronze-wash 边框色（深色）/ rule-line-bright（浅色）。
@@ -204,9 +213,8 @@ components:
 
 ### Inputs / Composer
 
-- **Style:** ink-900 底，1px rule-line 边框，2px 圆角。
-- **Focus (dark):** 边框变 cinnabar。
-- **Focus (light):** 边框变 bone-300。无红色。
+- **Style:** ink-900 底，1px rule-line 边框。表单输入 10px 圆角（`rounded.xl`，如 `.auth-input`）；主聊天 composer 输入舱 22px（`rounded.bubble`，`.composer__box`）；落地页输入 12px（`rounded.2xl`）。
+- **Focus:** 边框变 bone-400（深浅两色一致，如 `.composer__box:focus-within`、`.auth-input:focus`）。输入框聚焦不使用朱砂红——强调色留给发送/提交按钮本身。
 - **Placeholder:** bone-500，已校准至 4.5:1 对比度。
 
 ### Archive Panel (Slip)
@@ -218,7 +226,7 @@ components:
 
 ### Theme Toggle
 
-- **Style:** 32px 圆形按钮，1px rule-line-bright 边框。
+- **Style:** 方形按钮，4px 圆角（`rounded.sm`，`.theme-toggle`），1px rule-line-bright 边框。
 - **Icons:** 内联 SVG — 太阳（浅色）、月亮（深色）、半明半暗太阳（跟随系统）。
 - **Behavior:** 单击循环：system → light → dark。
 
