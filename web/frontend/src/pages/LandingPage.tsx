@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import confetti from "canvas-confetti";
 import { KairosLogo } from "../components/KairosLogo";
 import { AuthModal } from "../components/auth/AuthModal";
+import { AccountMenu } from "../components/auth/AccountMenu";
 import { useAuth } from "../auth";
 import { ThemeSwitcher } from "../theme";
 
@@ -182,6 +183,7 @@ export default function LandingPage() {
         </div>
         <nav className="oracle-header__actions">
           <ThemeSwitcher />
+          <AccountMenu />
           <button
             type="button"
             className="oracle-header__cta"

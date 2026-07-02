@@ -123,6 +123,85 @@
   border-color: var(--cinnabar);
 }
 
+/* 账号名 → hover/点击展开「退出登录」下拉 */
+.account--menu {
+  position: relative;
+}
+
+.account__trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.account__trigger:hover,
+.account--menu:hover .account__trigger,
+.account__trigger[aria-expanded="true"] {
+  border-color: var(--rule-line-bright);
+}
+
+.account__dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 128px;
+  padding: 4px;
+  background: var(--ink-900);
+  border: 1px solid var(--rule-line-bright);
+  border-radius: 10px;
+  z-index: 40;
+  animation: account-menu-in 0.12s ease;
+}
+
+/* hover 到 trigger 与菜单之间的缝隙时不至于收起 */
+.account__dropdown::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 0;
+  right: 0;
+  height: 6px;
+}
+
+.account__dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  color: var(--bone-300);
+  font-family: var(--font-cn);
+  font-size: 13px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.account__dropdown-item:hover {
+  color: var(--cinnabar);
+  background: var(--ink-850);
+}
+
+[data-theme="light"] .account__dropdown {
+  background: var(--bone-100);
+}
+
+[data-theme="light"] .account__dropdown-item:hover {
+  background: var(--bone-200);
+}
+
+@keyframes account-menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @keyframes auth-scrim-in {
   from { opacity: 0; }
   to { opacity: 1; }
