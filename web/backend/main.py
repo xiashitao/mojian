@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .database import init_db
 from .routers import chart, arbitrate, charts_store, chat, admin, conversations, memory
 from .routers import auth as auth_router
+from .routers import oauth as oauth_router
 from .routers import mock_chat
 
 
@@ -47,6 +48,7 @@ def health():
 
 # Register routers under /api prefix
 app.include_router(auth_router.router, prefix="/api")
+app.include_router(oauth_router.router, prefix="/api")
 app.include_router(mock_chat.router, prefix="/api")
 app.include_router(chart.router, prefix="/api")
 app.include_router(arbitrate.router, prefix="/api")

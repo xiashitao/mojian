@@ -52,6 +52,24 @@ export function logout(): Promise<{ ok: boolean }> {
   return post<{ ok: boolean }>("/logout", {});
 }
 
+/** Which third-party login providers the server has configured. */
+export async function fetchProviders(): Promise<{ google: boolean }> {
+  try {
+    const res = await fetch(`${BASE_URL}/providers`, { credentials: "include" });
+    if (!res.ok) return { google: false };
+    return res.json();
+  } catch {
+    return { google: false };
+  }
+}
+
+/** Navigate to Google OAuth. Full-page redirect (not fetch): the server
+ *  round-trips through Google and sets the session cookie on the way back. */
+export function startGoogleLogin(): void {
+  const anon = encodeURIComponent(getAnonId());
+  window.location.href = `${BASE_URL}/google/login?anon_id=${anon}`;
+}
+
 /** Current user from the session cookie, or null when signed out. */
 export async function fetchMe(): Promise<AuthUser | null> {
   const res = await fetch(`${BASE_URL}/me`, { credentials: "include" });

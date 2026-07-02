@@ -52,6 +52,13 @@ class Settings(BaseSettings):
     tencent_ses_region: str = "ap-guangzhou"  # ap-guangzhou | ap-hongkong
     tencent_template_id: int = 0  # 审核通过的邮件模板 ID（正文含 {{code}}）
 
+    # Google 登录（OAuth 2.0）。留空则前端不显示 Google 按钮。
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    # 站点公网地址，用于拼 OAuth 回调地址与登录后跳转。留空则按请求地址推断
+    # （生产建议显式填，如 https://kairos.xsticq.com，与 Google 后台登记的一致）。
+    public_base_url: str = ""
+
     class Config:
         env_file = str(WEB_DIR / ".env")
         env_file_encoding = "utf-8"

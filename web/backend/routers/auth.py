@@ -222,6 +222,12 @@ def verify_email_code(req: VerifyCodeRequest, response: Response):
     return UserOut(id=user_id, email=email, name=name, role=role)
 
 
+@router.get("/providers")
+def providers():
+    """前端据此决定显示哪些登录方式（Google 未配置时不显示按钮）。"""
+    return {"google": bool(settings.google_client_id and settings.google_client_secret)}
+
+
 @router.post("/logout")
 def logout(response: Response):
     clear_auth_cookie(response)
