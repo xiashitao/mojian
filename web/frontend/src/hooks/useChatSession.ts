@@ -126,12 +126,12 @@ export function useChatSession() {
       const text = (textInput ?? input).trim();
       if (!text || loading) return;
 
-      // TEMP(login-gate disabled): allow anonymous send. Restore to re-gate.
-      // if (!authLoading && !user) {
-      //   setInput((cur) => cur || text);
-      //   setAuthPrompt(true);
-      //   return;
-      // }
+      // Login required: guide anonymous users to sign in instead of sending.
+      if (!authLoading && !user) {
+        setInput((cur) => cur || text);
+        setAuthPrompt(true);
+        return;
+      }
 
       const userId = `local-${uuid()}`;
       const pendingId = `pending-${uuid()}`;

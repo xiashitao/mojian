@@ -142,12 +142,12 @@ export default function LandingPage() {
     return () => io.disconnect();
   }, []);
 
-  // TEMP(login-gate disabled): run the action directly. Restore the check to re-gate.
+  // Login required: guide anonymous users to sign in before entering a session.
   const requireAuth = (action: () => void) => {
-    // if (!authLoading && !user) {
-    //   setAuthOpen(true);
-    //   return;
-    // }
+    if (!authLoading && !user) {
+      setAuthOpen(true);
+      return;
+    }
     action();
   };
 
