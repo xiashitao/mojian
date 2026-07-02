@@ -245,7 +245,7 @@
   max-width: 360px;
   background: var(--ink-900);
   border: 1px solid var(--rule-line-bright);
-  border-radius: 16px;
+  border-radius: 2px;
   padding: 22px;
   animation: auth-modal-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -267,40 +267,6 @@
   color: var(--bone-300);
 }
 
-.auth-modal__tabs {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 18px;
-}
-
-.auth-modal__tab {
-  flex: 1;
-  padding: 10px 8px;
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--bone-400);
-  font-family: var(--font-cn);
-  font-size: 14px;
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.auth-modal__tab:hover:not(.is-active) {
-  color: var(--bone-200);
-}
-
-.auth-modal__tab:focus-visible {
-  outline: 2px solid rgba(237, 228, 204, 0.72);
-  outline-offset: 2px;
-  border-radius: 2px;
-}
-
-.auth-modal__tab.is-active {
-  color: var(--bone-100);
-  border-bottom-color: var(--cinnabar);
-}
-
 .auth-form {
   display: flex;
   flex-direction: column;
@@ -308,10 +274,10 @@
 }
 
 .auth-input {
-  padding: 11px 14px;
+  padding: 12px 16px;
   background: var(--ink-950);
   border: 1px solid var(--rule-line);
-  border-radius: 10px;
+  border-radius: 2px;
   color: var(--bone-200);
   font-family: var(--font-cn);
   font-size: 14px;
@@ -319,8 +285,13 @@
   transition: border-color 0.15s;
 }
 
+/* 聚焦边框：深色→朱砂，浅色→bone-300（素 rule，无红） */
 .auth-input:focus {
-  border-color: var(--bone-400);
+  border-color: var(--cinnabar);
+}
+
+[data-theme="light"] .auth-input:focus {
+  border-color: var(--bone-300);
 }
 
 .auth-input::placeholder {
@@ -340,7 +311,7 @@
   padding: 11px;
   background: var(--cinnabar);
   border: none;
-  border-radius: 10px;
+  border-radius: 2px;
   color: var(--bone-100);
   font-family: var(--font-cn);
   font-size: 14px;
@@ -383,11 +354,12 @@
 /* 验证码登录：标题 + 换邮箱/重新发送 链接行 */
 .auth-modal__title {
   margin: 0 0 14px;
-  font-family: var(--font-brand);
+  /* 一字一体 Rule：模态标题属 UI 文本，用 Inter 正文族，衬线仅留给品牌标识 */
+  font-family: var(--font-cn);
   font-size: 16px;
   font-weight: 600;
   color: var(--bone-100);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
 }
 
 .auth-otp-actions {
@@ -454,7 +426,7 @@
   background: #ffffff;
   color: #3c4043;
   border: 1px solid rgba(0, 0, 0, 0.14);
-  border-radius: 10px;
+  border-radius: 2px;
   font-family: var(--font-cn);
   font-size: 14px;
   cursor: pointer;
