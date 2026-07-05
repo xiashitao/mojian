@@ -104,7 +104,9 @@ export function useChatSession() {
   const selectConversation = useCallback(
     (id: string) => {
       if (id === conversationId) return;
-      setMobilePanel(null);
+      // 注意:不要在这里 setMobilePanel(null)。mobilePanel 是移动端抽屉的开关,
+      // 在移动端切换会话后强行收起抽屉,会让用户看不到切换结果——这是 bug。
+      // 抽屉的关闭应交给遮罩点击 / 收起按钮 / 汉堡按钮,由用户主动触发。
       navigate(`/session/${id}`);
     },
     [conversationId, navigate],
@@ -115,7 +117,7 @@ export function useChatSession() {
     setMessages([]);
     setLatestState(null);
     setBirthInfo(null);
-    setMobilePanel(null);
+    // 同上:不在新建会话时关闭移动端抽屉,否则面板会立刻收起。
     navigate("/session");
   }, [navigate]);
 
