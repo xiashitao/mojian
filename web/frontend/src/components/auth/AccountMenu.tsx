@@ -61,7 +61,12 @@ export function AccountMenu() {
           aria-haspopup="menu"
           aria-expanded={menuOpen}
         >
-          <span className="account__name">{user.name || user.email}</span>
+          <span
+            className="account__name"
+            title={user.name || user.email}
+          >
+            {user.name || user.email}
+          </span>
           {user.role !== "user" && <span className="account__role">{user.role}</span>}
         </button>
         {menuOpen && (
