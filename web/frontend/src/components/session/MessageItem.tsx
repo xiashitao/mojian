@@ -4,6 +4,19 @@ import { formatClock } from "../../utils/sessionFormat";
 import { KairosLogo } from "../KairosLogo";
 import { ChartCard } from "./ChartCard";
 
+/**
+ * CommonMark 的加粗定界符(flanking)规则在中文全角标点旁会失效:
+ * `**结论：**今年` / `**（用神）**` 会原样吐出星号而不是加粗。
+ * 渲染前把包在 ** 里的首尾全角标点挪到边界外(`**结论：**` → `**结论**：`),
+ * 语义不变,加粗恢复解析。
+ */
+const BOLD_CJK_PUNCT_RE =
+  /\*\*([（【「『"'《]*)([^*\n]+?)([：:，。、；！？…）】」』"'》]*)\*\*/g;
+
+function normalizeMarkdown(text: string): string {
+  return text.replace(BOLD_CJK_PUNCT_RE, "$1**$2**$3");
+}
+
 export interface MessageItemProps {
   message: UiMessage;
   loading: boolean;
@@ -39,7 +52,7 @@ export function MessageItem({
         ) : role === "assistant" ? (
           // 模型输出会带轻量 markdown(**加粗**等),按 markdown 渲染;
           // 用户消息保持纯文本,不解析用户输入里的标记。
-          <Markdown>{content}</Markdown>
+          <Markdown>{normalizeMarkdown(content)}</Markdown>
         ) : (
           content
         )}

@@ -270,7 +270,7 @@
   /* 移动端窄屏:用户名/邮箱进一步收紧,避免撑挤 header 其他元素。
      仍保留 ellipsis,完整内容通过 title 属性在长按/hover 时可见。 */
   .account__name {
-    max-width: 90px;
+    max-width: 48px;
   }
 
   /* iOS Safari 在 input/textarea 字号 < 16px 时会自动缩放页面以放大输入框,
