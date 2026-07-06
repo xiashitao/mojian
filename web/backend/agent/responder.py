@@ -10,8 +10,8 @@ from bazibase.constants import ELEMENT_CONQUEST, ELEMENT_PRODUCTION
 from bazibase.rules.fortune import ROLE_PLAIN
 
 from ..services.llm import LLMError, complete, fast_provider, is_configured, stream
-from .context import render_history, render_notes, topic_cn
-from .models import BirthInfo, ChatState, Topic
+from .context import render_history, render_notes, render_profile, topic_cn
+from .models import BirthInfo, ChatState, Topic, UserProfile
 
 
 _FIELD_CN = {
@@ -141,6 +141,7 @@ def stream_consultation_reply(
     user_message: str = "",
     history: list[dict[str, Any]] | None = None,
     memory_notes: list[dict[str, Any]] | None = None,
+    profile: UserProfile | None = None,
     tone: str | None = None,
 ) -> Iterator[tuple[str, ChatState | None, dict[str, Any] | None]]:
     """Stream the consultation reply chunk by chunk.
@@ -179,6 +180,7 @@ def stream_consultation_reply(
                                          user_message=user_message,
                                          history=history,
                                          memory_notes=memory_notes,
+                                         profile=profile,
                                          tone=tone)
     collected = []
     try:
@@ -696,6 +698,7 @@ def _build_stream_reply_prompt(
     user_message: str = "",
     history: list[dict[str, Any]] | None = None,
     memory_notes: list[dict[str, Any]] | None = None,
+    profile: UserProfile | None = None,
     tone: str | None = None,
 ) -> dict[str, str]:
     """Streaming (non-JSON) prompt that answers the user's current question."""
@@ -703,11 +706,15 @@ def _build_stream_reply_prompt(
     analysis_block = _build_analysis_block(context)
 
     # Stable-first / volatile-last, so the big 命盘 JSON forms a cacheable prefix:
-    # 结构化分析结果（逐轮不变） → 过往记录 → 最近对话 → 本轮问题（每轮都变）。
+    # 结构化分析结果（逐轮不变） → 用户画像(每N轮变) → 过往记录 → 最近对话 → 本轮问题（每轮都变）。
     parts = [
         "## 结构化分析结果",
         json.dumps(analysis_block, ensure_ascii=False, indent=2),
     ]
+    profile_text = render_profile(profile)
+    if profile_text:
+        parts.append("## 用户画像（这位用户的稳定特征，回答时照顾它但不被它框死）")
+        parts.append(profile_text)
     notes = render_notes(memory_notes, topic)
     if notes:
         parts.append("## 过往咨询记录（这位用户之前聊过的结论）")

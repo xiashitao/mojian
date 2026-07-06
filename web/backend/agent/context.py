@@ -110,3 +110,35 @@ def render_notes(notes: list[dict[str, Any]] | None, topic: str | None) -> str:
 
 def _has_conclusion(note: dict[str, Any]) -> bool:
     return bool(str(note.get("conclusion", "")).strip())
+
+
+def render_profile(profile) -> str:
+    """Render a UserProfile into a compact, natural-language block for the prompt.
+
+    Empty profile → empty string (caller skips the section). Designed to slot
+    into user_prompt right before 过往咨询记录:profile is stable-ish (changes
+    every N turns) so it sits in the cacheable middle of the prompt, ahead of
+    the per-turn history/question tail.
+
+    Kept deliberately short and factual — the model should *use* it as context,
+    not parrot it. Style: reads like a one-paragraph briefing about the user.
+    """
+    if profile is None or profile.is_empty():
+        return ""
+
+    parts: list[str] = []
+
+    if profile.life_stage:
+        parts.append(f"人生阶段：{profile.life_stage}")
+    if profile.core_concerns:
+        parts.append(f"核心关切：{'、'.join(profile.core_concerns)}")
+    if profile.traits:
+        parts.append(f"性格特征：{'、'.join(profile.traits)}")
+    if profile.long_term_goal:
+        parts.append(f"长期目标：{profile.long_term_goal}")
+    if profile.comm_style:
+        parts.append(f"沟通偏好：{profile.comm_style}")
+    if profile.raw_summary and profile.raw_summary.strip():
+        parts.append(profile.raw_summary.strip())
+
+    return "；".join(parts) + "。" if parts else ""

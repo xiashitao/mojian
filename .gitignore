@@ -57,3 +57,6 @@ web/backend/eval/reports/
 # tsc -b accidentally emits .js next to TS sources; Vite compiles .tsx directly
 web/frontend/src/**/*.js
 web/frontend/src/**/*.js.map
+
+# DB backups (local testing artifacts)
+*.db.bak*

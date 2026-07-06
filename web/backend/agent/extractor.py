@@ -80,6 +80,16 @@ _EXTRACT_SYSTEM_PROMPT = """\
 
 7. **gender**: "male" 或 "female" 或 null。
 
+8. **subject**: 这套出生信息是「谁的」。从这五个值里选：
+   - "self"：用户本人（最常见）。用户没明说时也用 "self"。
+   - "spouse"：用户的配偶（"我老公/老婆/先生/太太/另一半"）
+   - "child"：用户的子女（"我儿子/女儿/孩子/小孩/宝宝"）
+   - "parent"：用户的父母（"我爸/妈/父亲/母亲/老爸"）
+   - "other"：其他（朋友、合伙人、亲属等非直系）
+   - "unknown"：消息里出现了生辰，但完全无法判断是谁的（如"帮我看下 1990 年的"没说关系）。
+   判断依据：抓「我的」「我XX的」这类关系词。"我儿子的生日是…" → child；"我是 90 年的" → self。
+   只在**确实出现了生辰信息**时才需要判断 subject；没提到生辰一律输出 "self"。
+
 ## 输出格式
 
 ```json
@@ -90,7 +100,8 @@ _EXTRACT_SYSTEM_PROMPT = """\
   "birth_time": "08:30",
   "birth_place": "北京",
   "longitude": 116.4,
-  "gender": "male"
+  "gender": "male",
+  "subject": "self"
 }
 ```
 
@@ -171,6 +182,11 @@ def _extract_with_llm(text: str) -> ExtractionResult | None:
     if gender not in ("male", "female"):
         gender = None
 
+    # subject:这套八字是谁的。校验到枚举;无效值或没出现生辰时归到 self/None。
+    subject_raw = data.get("subject")
+    valid_subjects = ("self", "spouse", "child", "parent", "other", "unknown")
+    subject = subject_raw if subject_raw in valid_subjects else "self"
+
     birth_date = data.get("birth_date")
     birth_time = data.get("birth_time")
 
@@ -186,6 +202,10 @@ def _extract_with_llm(text: str) -> ExtractionResult | None:
     if birth_place:
         confidence += 0.12
 
+    # 把 subject 落进 birth_info(供 planner 持久化/排盘)。
+    # "unknown" 单独保留在 ExtractionResult 里:birth_info 不存 unknown,
+    # 改成默认 self,真正的 unknown 信号通过 result.subject 传给 router。
+    birth_subject: Subject = "self" if subject in (None, "unknown", "self") else subject
     birth_info = BirthInfo(
         birth_date=birth_date,
         birth_time=birth_time,
@@ -193,14 +213,18 @@ def _extract_with_llm(text: str) -> ExtractionResult | None:
         longitude=longitude,
         gender=gender,
         confidence=min(confidence, 1.0),
+        subject=birth_subject,
     )
     birth_info.missing_fields = birth_info.complete_missing_fields()
 
+    # 只有真正抽到了生辰信息,subject 才有意义;否则一律 None(无关主体)。
+    has_birth = any((birth_date, birth_time, longitude is not None, gender, birth_place))
     return ExtractionResult(
         intent=intent,
         topic=topic,
         birth_info=birth_info,
         raw_text=text,
+        subject=subject if has_birth else None,
     )
 
 

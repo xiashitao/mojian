@@ -57,6 +57,12 @@ export function useChatSession() {
   const [loading, setLoading] = useState(false);
   const [loadingConv, setLoadingConv] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"archive" | null>(null);
+  // 主体确认对话框:后端返回 needs_subject_confirmation 时,挂起的消息文本 +
+  // 抽到的八字。用户选完主体后,带 subject 重发 text。
+  const [subjectConfirm, setSubjectConfirm] = useState<{
+    text: string;
+    birthInfo: Record<string, unknown> | null;
+  } | null>(null);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const sentRef = useRef(false);
@@ -124,7 +130,7 @@ export function useChatSession() {
   const goHome = useCallback(() => navigate("/"), [navigate]);
 
   const send = useCallback(
-    async (textInput?: string) => {
+    async (textInput?: string, subjectOverride?: string) => {
       const text = (textInput ?? input).trim();
       if (!text || loading) return;
 
@@ -151,7 +157,7 @@ export function useChatSession() {
 
       try {
         const res = await sendChatMessage(
-          { conversation_id: conversationId ?? undefined, message: text, tone },
+          { conversation_id: conversationId ?? undefined, message: text, tone, subject: subjectOverride },
           (chunk) => {
             setMessages((prev) =>
               prev.map((m) =>
@@ -164,6 +170,15 @@ export function useChatSession() {
             setMessages((prev) =>
               prev.map((m) => (m.id === pendingId ? { ...m, chart } : m)),
             );
+          },
+          (birthInfo) => {
+            // 后端要求确认主体:回滚这条消息(避免"半截"消息留在对话流),
+            // 弹出主体确认对话框。用户选完后会带 subject 重发。
+            setMessages((prev) =>
+              prev.filter((m) => m.id !== userId && m.id !== pendingId),
+            );
+            setInput(text);  // 恢复输入框,让用户看到原消息
+            setSubjectConfirm({ text, birthInfo });
           },
         );
         setConversationId(res.conversation_id);
@@ -205,6 +220,22 @@ export function useChatSession() {
     },
     [authLoading, conversationId, input, loading, navigate, refreshConversations, tone, user],
   );
+
+  // 用户在主体确认对话框里选了主体 → 带该 subject 重发原消息。
+  const confirmSubject = useCallback(
+    (subject: string) => {
+      const text = subjectConfirm?.text;
+      setSubjectConfirm(null);
+      setInput("");
+      if (text) void send(text, subject);
+    },
+    [subjectConfirm, send],
+  );
+
+  // 用户取消主体确认 → 关闭对话框(消息已在 onSubjectConfirmation 里回滚)。
+  const cancelSubjectConfirm = useCallback(() => {
+    setSubjectConfirm(null);
+  }, []);
 
   const stop = useCallback(() => {
     const controller = abortRef.current;
@@ -286,5 +317,8 @@ export function useChatSession() {
     goHome,
     authPrompt,
     closeAuthPrompt: () => setAuthPrompt(false),
+    subjectConfirm,
+    confirmSubject,
+    cancelSubjectConfirm,
   } as const;
 }

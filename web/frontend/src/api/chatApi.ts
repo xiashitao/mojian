@@ -52,6 +52,7 @@ export async function sendChatMessage(
   onToken: (text: string) => void,
   signal?: AbortSignal,
   onChart?: (chart: ChartData) => void,
+  onSubjectConfirmation?: (birthInfo: Record<string, unknown>) => void,
 ): Promise<ChatResponse> {
   if (MOCK_MODE) return _mockStream(onToken);
 
@@ -92,6 +93,7 @@ export async function sendChatMessage(
           type: string;
           text?: string;
           chart?: ChartData;
+          birth_info?: Record<string, unknown>;
           conversation_id?: string;
           analysis_id?: string;
           state?: ChatResponse["state"];
@@ -101,6 +103,10 @@ export async function sendChatMessage(
           onToken(msg.text);
         } else if (msg.type === "chart" && msg.chart) {
           onChart?.(msg.chart);
+        } else if (msg.type === "needs_subject_confirmation" && msg.birth_info) {
+          // 后端检测到八字但主体不明。通知前端弹"这是哪位的?"对话框。
+          // 用户选完后,前端带 subject 重发同一条消息(req.message 仍是原消息)。
+          onSubjectConfirmation?.(msg.birth_info);
         } else if (msg.type === "done") {
           finalResponse = {
             conversation_id: msg.conversation_id ?? "",

@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     # （生产建议显式填，如 https://kairos.xsticq.com，与 Google 后台登记的一致）。
     public_base_url: str = ""
 
+    # 用户画像:每 N 轮咨询后用 fast 模型批量更新一次(profile_enabled=False 可一键关闭)。
+    profile_enabled: bool = True
+    profile_update_interval: int = 3  # 每 N 轮触发一次更新
+
     class Config:
         env_file = str(WEB_DIR / ".env")
         env_file_encoding = "utf-8"

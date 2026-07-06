@@ -8,11 +8,13 @@ from datetime import datetime
 from typing import Any
 
 from ..services import llm
+from ..config import settings
 from . import memory, repository
 from .chart_card import build_chart_card
+from .profile import build_or_update_profile
 from .extractor import merge_birth_info, _has_birth_signal
 from .ids import new_analysis_id
-from .models import ChatState, ConversationState, Topic
+from .models import BirthInfo, ChatState, ConversationState, Topic
 from .router import route
 from .responder import (
     build_missing_info_reply,
@@ -37,15 +39,34 @@ def _recall_note(bi) -> str:
     )
 
 
-def stream_chat(message: str, conversation_id: str | None = None, *, user_id: str | None = None, memory_key: str | None = None, tone: str | None = None) -> Iterator[str]:
+def _profile_changed(before, after) -> bool:
+    """Whether the profile update actually differs from the current one.
+    Avoids needless DB writes (and prompt-cache invalidation downstream) when
+    the LLM returned the same profile it was given."""
+    if before is None:
+        return not after.is_empty()
+    return before.model_dump() != after.model_dump()
+
+
+def stream_chat(message: str, conversation_id: str | None = None, *, user_id: str | None = None, memory_key: str | None = None, subject: str | None = None, tone: str | None = None) -> Iterator[str]:
     """Stream one user message response as newline-delimited JSON chunks.
 
     Yields:
         JSON lines of the form:
           {"type": "token", "text": "..."}   — incremental reply text
+          {"type": "chart", "chart": {...}}  — chart card payload (once per birth)
+          {"type": "needs_subject_confirmation", "birth_info": {...}}
+                                            — birth extracted but subject unclear;
+                                              frontend should ask "这是哪位的?"
+                                              and resend with subject set
           {"type": "done", "conversation_id": ..., "analysis_id": ...,
            "state": {...}}                    — final metadata (last line)
           {"type": "error", "detail": "..."}  — on failure
+
+    `subject`: when set (e.g. from the frontend confirmation dialog), forces
+    the conversation's current subject for this turn — used to resolve
+    "unknown"-subject births. When None, the conversation's current_subject
+    is used (defaulting to "self").
     """
     started = time.monotonic()
     # Own the conversation by the memory key (user id, else anonymous id).
@@ -73,10 +94,19 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
 
     try:
         state = _load_state(conv_id)
-        # Seed remembered birth info so returning users skip re-entering it.
+        # 主体解析优先级:前端显式传入(确认过的) > 会话上次主体 > 默认 self。
+        # 切换主体后,所有记忆(八字/画像/笔记)按新主体隔离重载。
+        if subject and subject != state.current_subject:
+            state.current_subject = subject
+            # 切主体:丢弃旧主体的 birth_info,改从记忆恢复新主体的(若有)。
+            state.birth_info = BirthInfo()
+        current_subject = state.current_subject
+
+        # Seed remembered birth info (for THIS subject) so returning users skip
+        # re-entering it. Note: subject-scoped, not user-scoped.
         remembered = None
         if not state.birth_info.is_complete():
-            remembered = memory.get_birth_info(memory_key)
+            remembered = memory.get_birth_info(memory_key, current_subject)
             if remembered:
                 state.birth_info = merge_birth_info(remembered, state.birth_info)
 
@@ -88,10 +118,25 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
                    output_data=decision.model_dump(),
                    summary=f"Routed to action={decision.action}.")
 
+        # 抽到了明确的主体("我儿子的"→child)且与会话当前主体不同 → 切换。
+        # 切换后,重新按新主体加载记忆(八字可能完全不同)。
+        if decision.subject and decision.subject not in (None, "unknown") \
+                and decision.subject != current_subject:
+            current_subject = decision.subject
+            state.current_subject = current_subject
+            # 若用户本轮新报了完整八字,以新八字为准;否则尝试从记忆恢复该主体。
+            if merged_birth_info.is_complete():
+                state.birth_info = merged_birth_info
+            else:
+                remembered_other = memory.get_birth_info(memory_key, current_subject)
+                state.birth_info = remembered_other or BirthInfo(subject=current_subject)
+                merged_birth_info = state.birth_info
+
         state.birth_info = merged_birth_info
+        state.birth_info.subject = current_subject  # 落实 subject 到 birth_info
         state.current_topic = topic or state.current_topic
         state.last_analysis_id = analysis_id
-        memory.save_birth_info(memory_key, merged_birth_info)
+        memory.save_birth_info(memory_key, merged_birth_info, subject=current_subject)
         tracer.add("merge_session_state",
                    input_data={"previous_state": repository.get_conversation_state(conv_id)},
                    output_data=state.model_dump(), summary="Merged session state.")
@@ -126,6 +171,22 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
             reply, chat_state = build_missing_info_reply(topic, merged_birth_info)
             yield json.dumps({"type": "token", "text": reply}, ensure_ascii=False) + "\n"
             reply_parts.append(reply)
+        elif decision.action == "confirm_subject":
+            # 八字齐全但「不知道是谁的」:不排盘,发确认事件让前端弹表单。
+            # 把已抽到的八字信息一并返回,供前端展示("这套 1990-05-15 的生辰是哪位的?")。
+            chat_state = ChatState(
+                topic=topic, needs_more_info=True,
+                missing_fields=[],
+                suggested_followups=[],
+            )
+            yield json.dumps({
+                "type": "needs_subject_confirmation",
+                "birth_info": merged_birth_info.model_dump(),
+            }, ensure_ascii=False) + "\n"
+            tracer.add("confirm_subject",
+                       input_data={"subject": decision.subject},
+                       output_data={"birth_info": merged_birth_info.model_dump()},
+                       summary="Birth complete but subject unclear; asked user to confirm.")
         else:
             # Inject "now" here — the only place the agent reads the clock — so
             # the chart resolves its current 大运 + 流年 as the shared basis for
@@ -176,7 +237,8 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
 
             clarify = decision.action == "clarify"
             prior_messages = _prior_messages(conv_id, user_message["id"])
-            past_notes = memory.recent_notes(memory_key)
+            past_notes = memory.recent_notes(memory_key, subject=current_subject)
+            current_profile = memory.get_profile(memory_key, subject=current_subject)
             generation_trace = None
             for chunk, final_state, generation_trace in stream_consultation_reply(
                 topic, tool_result,
@@ -185,6 +247,7 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
                 user_message=message,
                 history=prior_messages,
                 memory_notes=past_notes,
+                profile=current_profile,
                 tone=tone,
             ):
                 if chunk:
@@ -201,10 +264,40 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
             conclusion = (generation_trace or {}).get("conclusion", "")
             if conclusion:
                 memory.add_note(memory_key, topic=topic, question=message,
-                                conclusion=conclusion, analysis_id=analysis_id)
+                                conclusion=conclusion, analysis_id=analysis_id,
+                                subject=current_subject)
                 tracer.add("update_memory", input_data={"topic": topic},
                            output_data={"conclusion": conclusion},
                            summary="Saved consultation conclusion to user memory.")
+
+            # 用户画像:每 N 轮咨询后用 fast 模型批量更新。
+            # 用 turns_since_update 计数,达到阈值就回顾最近的笔记+对话,更新画像。
+            # 放在 reply 生成之后,不阻塞用户(回答已经流式返回完了)。
+            # 按主体隔离:self 和 child 的画像分别更新,互不污染。
+            if settings.profile_enabled:
+                turns = memory.increment_profile_turns(memory_key, subject=current_subject)
+                if turns >= settings.profile_update_interval:
+                    try:
+                        current = memory.get_profile(memory_key, subject=current_subject)
+                        interval = settings.profile_update_interval
+                        recent_notes = memory.recent_notes(memory_key, subject=current_subject, limit=interval)
+                        updated = build_or_update_profile(
+                            current=current,
+                            recent_notes=recent_notes,
+                            recent_history=prior_messages,
+                        )
+                        # 只在画像确实变化时才写库(避免无谓的 DB 写 + 缓存失效)。
+                        if _profile_changed(current, updated):
+                            memory.save_profile(memory_key, updated, subject=current_subject)
+                            tracer.add(
+                                "update_profile",
+                                input_data={"turns": turns},
+                                output_data=updated.model_dump(),
+                                summary="Updated user profile from recent consultations.",
+                            )
+                    except Exception as e:  # 画像失败绝不能影响主流程
+                        tracer.add("update_profile_error", input_data={"error": str(e)},
+                                   output_data={}, summary=f"Profile update skipped: {e}")
 
         full_reply = "".join(reply_parts)
         repository.update_conversation_state(conv_id, state.model_dump())

@@ -108,4 +108,6 @@ export type BirthInfo = {
   birth_place?: string | null;
   gender?: string | null;
   longitude?: number | null;
+  /** 命盘主体:self/spouse/child/parent/other。后端返回,前端展示用。 */
+  subject?: string | null;
 };

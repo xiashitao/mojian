@@ -6,6 +6,7 @@ import { ChatContextBar } from "../components/session/ChatContextBar";
 import { MessageList } from "../components/session/MessageList";
 import { Composer } from "../components/session/Composer";
 import { AuthModal } from "../components/auth/AuthModal";
+import { SubjectConfirmDialog } from "../components/session/SubjectConfirmDialog";
 
 export default function SessionPage() {
   const {
@@ -34,6 +35,9 @@ export default function SessionPage() {
     goHome,
     authPrompt,
     closeAuthPrompt,
+    subjectConfirm,
+    confirmSubject,
+    cancelSubjectConfirm,
   } = useChatSession();
 
   const latestChart =
@@ -114,6 +118,14 @@ export default function SessionPage() {
         <AuthModal
           onClose={closeAuthPrompt}
           prompt="登录后才能开始对话，你的咨询和记忆会保存在账号里。"
+        />
+      )}
+
+      {subjectConfirm && (
+        <SubjectConfirmDialog
+          birthInfo={subjectConfirm.birthInfo}
+          onCancel={cancelSubjectConfirm}
+          onConfirm={confirmSubject}
         />
       )}
     </div>

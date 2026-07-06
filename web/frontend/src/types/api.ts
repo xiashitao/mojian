@@ -96,6 +96,8 @@ export interface ChatRequest {
   message: string;
   anon_id?: string;
   tone?: string;
+  /** 命盘主体:self/spouse/child/parent/other。由主体确认对话框回传。 */
+  subject?: string;
 }
 
 export interface ChatMessage {

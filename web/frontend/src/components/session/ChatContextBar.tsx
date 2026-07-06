@@ -10,6 +10,15 @@ export interface ChatContextBarProps {
   chart: ChartData | null;
 }
 
+/** 主体标签:把后端的 subject 枚举翻成中文,让用户一眼看到当前在聊谁。 */
+const SUBJECT_LABEL: Record<string, string> = {
+  self: "自己",
+  spouse: "配偶",
+  child: "子女",
+  parent: "父母",
+  other: "他人",
+};
+
 /** Slim strip under the header showing the current topic, birth info, and a
  *  secondary entry point into the full 命盘 detail. */
 export function ChatContextBar({ topic, birthInfo, chart }: ChatContextBarProps) {
@@ -20,6 +29,8 @@ export function ChatContextBar({ topic, birthInfo, chart }: ChatContextBarProps)
   );
 
   if (!topic && !hasBirth) return null;
+
+  const subjectLabel = birthInfo?.subject ? SUBJECT_LABEL[birthInfo.subject] ?? null : null;
 
   return (
     <div className="chat-context">
@@ -36,6 +47,7 @@ export function ChatContextBar({ topic, birthInfo, chart }: ChatContextBarProps)
             .join(" · ")}
         </span>
       )}
+      {subjectLabel && <span className="chat-context__subject">{subjectLabel}</span>}
       {chart && (
         <button
           type="button"

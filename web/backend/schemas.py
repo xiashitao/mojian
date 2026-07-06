@@ -37,3 +37,7 @@ class ChatRequest(BaseModel):
     # Answer tone preset (advisor | friend | direct). Only the wording style;
     # unknown / None falls back to the restrained default in the responder.
     tone: Optional[str] = None
+    # 命盘主体:由前端"确认主体"对话框回传(self/spouse/child/parent/other)。
+    # 后端检测到八字但主体不明时会先返回 needs_subject_confirmation 事件,
+    # 用户在前端选完主体后,带这个字段重新发请求。None=沿用会话当前主体。
+    subject: Optional[str] = None
