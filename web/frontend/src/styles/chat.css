@@ -476,18 +476,23 @@
 }
 
 /* ── Context strip (relocated topic / birth from the old rail) ── */
+/* 强制单行:窄屏下内容超宽时由 __birth 省略号截断兜底,
+   避免「查看专业细盘」按钮被挤到第二行。 */
 .chat-context {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   flex-shrink: 0;
+  min-width: 0;
   padding: 9px 24px;
   background: var(--ink-900);
   border-bottom: 1px solid var(--rule-line);
 }
 
 .chat-context__topic {
+  flex-shrink: 0;
+  white-space: nowrap;
   font-family: var(--font-cn);
   font-size: 12px;
   font-weight: 500;
@@ -498,13 +503,31 @@
 }
 
 .chat-context__birth {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--bone-400);
   letter-spacing: 0.04em;
 }
 
+.chat-context__subject {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-family: var(--font-cn);
+  font-size: 12px;
+  color: var(--bone-300);
+  padding: 2px 10px;
+  border: 1px solid var(--rule-line-bright);
+  border-radius: 999px;
+}
+
 .chat-context__chart {
+  flex-shrink: 0;
+  white-space: nowrap;
   margin-left: auto;
   padding: 2px 12px;
   background: transparent;
@@ -1189,6 +1212,13 @@
     align-items: flex-end;
     gap: 6px;
     padding: 6px;
+  }
+
+  /* 窄屏下上下文条空间紧张:收紧左右留白和元素间距,
+     给出生信息(可省略号截断)和「查看专业细盘」按钮让出宽度。 */
+  .chat-context {
+    padding: 8px 14px;
+    gap: 8px;
   }
 
   /* iOS Safari 在 input/textarea 字号 < 16px 时会自动缩放页面以放大输入框,
