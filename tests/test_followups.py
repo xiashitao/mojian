@@ -1,9 +1,10 @@
 """History-aware follow-up suggestions (LLM-free fallback)."""
-from web.backend.agent.responder import _FOLLOWUP_POOL, _followups
+from web.backend.agent.responder import _followups
+from web.backend.agent.topics import topic_spec
 
 
 def test_excludes_already_asked():
-    asked = _FOLLOWUP_POOL["career"][0]
+    asked = topic_spec("career").followups[0]
     history = [
         {"role": "user", "content": asked},
         {"role": "assistant", "content": "..."},

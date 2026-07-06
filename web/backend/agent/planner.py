@@ -154,7 +154,10 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
 
         if decision.action in ("smalltalk", "out_of_scope"):
             reply, chat_state = (
-                build_smalltalk_reply()
+                build_smalltalk_reply(
+                    birth_complete=merged_birth_info.is_complete(),
+                    topic=topic,
+                )
                 if decision.action == "smalltalk"
                 else build_out_of_scope_reply()
             )

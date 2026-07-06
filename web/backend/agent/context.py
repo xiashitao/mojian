@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .topics import topic_cn  # noqa: F401 — re-export; 定义已移入话题注册表
+
 _ROLE_CN = {"user": "用户", "assistant": "助手"}
 
 # Char budgets — Chinese text is roughly a couple of characters per token.
@@ -24,15 +26,6 @@ HISTORY_FULL_CAP = 360   # recent turns — room for a whole assistant reply
 HISTORY_OLD_CAP = 160    # older turns with no 结论 to fall back on
 NOTES_MAX = 4
 NOTES_CHAR_BUDGET = 600
-
-
-def topic_cn(topic: str | None) -> str:
-    return {
-        "career": "事业",
-        "relationship": "感情",
-        "wealth": "财务",
-        "personality": "性格",
-    }.get(topic or "career", "这个问题")
 
 
 def _render_turn(msg: dict[str, Any], *, full: bool) -> str:

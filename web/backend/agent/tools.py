@@ -19,6 +19,7 @@ from bazibase.arbitration import (
 
 from ..services.llm import LLMError, complete, is_configured
 from .models import BirthInfo
+from .topics import all_key_ages
 from ..services.enrich import enrich_chart
 
 
@@ -78,8 +79,9 @@ def run_bazibase_tools(
 
 _STEMS = "甲乙丙丁戊己庚辛壬癸"
 _BRANCHES = "子丑寅卯辰巳午未申酉戌亥"
-# 升学考节点（周岁约）：中考~15、高考~18、考研~22。
-_EDU_NODE_AGES = (15, 18, 22)
+# 关键人生节点：各话题 key_ages 的并集（topics.py）。刻意话题无关——timeline 进
+# 「结构化分析结果」稳定前缀，若按话题裁剪，换话题即打穿工具缓存与提示词前缀缓存。
+_KEY_NODE_AGES = all_key_ages()
 _FUTURE_WINDOW = 7  # 近未来若干年的流年透视（覆盖"哪年好转/这几年"类问题）。
 
 
@@ -88,13 +90,13 @@ def _liunian_gz(year: int) -> str:
 
 
 def _timeline_facts(chart, diagnosis, reference_year: int | None) -> list[dict[str, Any]]:
-    """关键年份的流年事实（vs 命局 + 当时所在大运）——升学考节点（过去）+ 近未来
+    """关键年份的流年事实（vs 命局 + 当时所在大运）——关键人生节点（过去）+ 近未来
     窗口。让 LLM 能锚定具体年份（如高考那年）做时段分析，而不必自行换算或猜测。"""
     dm = chart.day_master
     yong = diagnosis.yong_shen.ten_god
     natal = tuple(p.branch for p in chart.four_pillars)
     birth_year = chart.birth_clock_time.year
-    years = {birth_year + a for a in _EDU_NODE_AGES}
+    years = {birth_year + a for a in _KEY_NODE_AGES}
     if reference_year:
         years.update(range(reference_year, reference_year + _FUTURE_WINDOW))
 
