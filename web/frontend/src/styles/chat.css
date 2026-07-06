@@ -1150,6 +1150,9 @@
     display: flex;
   }
 
+  /* 移动端消息流的宽度/padding 规则统一放在 landing.css 的同名媒体查询里
+     (landing.css 在 index.css 中后导入,优先级更高),这里不重复定义。 */
+
   .composer__box {
     flex-direction: row;
     align-items: flex-end;

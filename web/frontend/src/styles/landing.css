@@ -83,16 +83,22 @@
     grid-template-columns: 1fr;
   }
 
+  /* 移动端消息流、header、输入框统一左右 16px 边距,视觉对齐。
+     消息本身占满可用宽度(max-width: 100%),不再被 85% 压窄。 */
   .message-stream {
     padding: 20px 16px 16px;
   }
 
   .message {
-    max-width: 85%;
+    max-width: 100%;
+  }
+
+  .chat-header {
+    padding: 0 16px;
   }
 
   .composer {
-    padding: 14px 20px 18px;
+    padding: 14px 16px 18px;
   }
 
   .archive {
