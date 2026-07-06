@@ -1,3 +1,4 @@
+import Markdown from "react-markdown";
 import type { MessageFeedback, UiMessage } from "../../types/session";
 import { formatClock } from "../../utils/sessionFormat";
 import { KairosLogo } from "../KairosLogo";
@@ -35,6 +36,10 @@ export function MessageItem({
       <div className="message__body">
         {pending && !content ? (
           <KairosLogo size={24} className="message__thinking" />
+        ) : role === "assistant" ? (
+          // 模型输出会带轻量 markdown(**加粗**等),按 markdown 渲染;
+          // 用户消息保持纯文本,不解析用户输入里的标记。
+          <Markdown>{content}</Markdown>
         ) : (
           content
         )}

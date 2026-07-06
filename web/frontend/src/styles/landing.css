@@ -1029,14 +1029,18 @@
     align-items: center;
   }
 
+  /* iOS Safari 在输入框字号 < 16px 时聚焦会自动放大页面且不还原。
+     这里必须 ≥ 16px(与 chat.css 中 .composer__input 的移动端规则一致;
+     landing.css 后导入,若此处写小字号会把那条 16px 覆盖掉)。
+     .landing__placeholder 是叠在输入框上的假占位符,字号需与之同步。 */
   .landing__input {
     height: 44px;
     line-height: 44px;
-    font-size: 14px;
+    font-size: 16px;
   }
 
   .landing__placeholder {
-    font-size: 14px;
+    font-size: 16px;
   }
 }
 

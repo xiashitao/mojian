@@ -381,13 +381,13 @@
 }
 
 /* 验证码登录：标题 + 换邮箱/重新发送 链接行 */
+/* 功能性对话框标题用 UI 黑体,--font-brand(宋体)保留给命盘/品牌场景。 */
 .auth-modal__title {
   margin: 0 0 14px;
-  font-family: var(--font-brand);
+  font-family: var(--font-cn);
   font-size: 16px;
   font-weight: 600;
   color: var(--bone-100);
-  letter-spacing: 0.04em;
 }
 
 .auth-otp-actions {
@@ -775,6 +775,43 @@
   color: var(--bone-200);
   padding: 0;
   border-radius: 0;
+  /* 助手消息经 react-markdown 渲染:块元素之间有换行文本节点,pre-wrap
+     会把它们显示成多余空行,段间距改由 p 的 margin 控制。 */
+  white-space: normal;
+}
+
+.message--assistant .message__body p {
+  margin: 0 0 10px;
+}
+
+.message--assistant .message__body p:last-child {
+  margin-bottom: 0;
+}
+
+.message--assistant .message__body strong {
+  font-weight: 600;
+  color: var(--bone-100);
+}
+
+.message--assistant .message__body ul,
+.message--assistant .message__body ol {
+  margin: 0 0 10px;
+  padding-left: 1.4em;
+}
+
+.message--assistant .message__body li {
+  margin-bottom: 4px;
+}
+
+/* 模型偶尔会输出小标题,视觉上压回正文体系,只保留加粗层级。 */
+.message--assistant .message__body h1,
+.message--assistant .message__body h2,
+.message--assistant .message__body h3,
+.message--assistant .message__body h4 {
+  margin: 0 0 8px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--bone-100);
 }
 
 .message.is-error .message__body {
