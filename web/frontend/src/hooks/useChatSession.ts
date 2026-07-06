@@ -123,7 +123,9 @@ export function useChatSession() {
     setMessages([]);
     setLatestState(null);
     setBirthInfo(null);
-    // 同上:不在新建会话时关闭移动端抽屉,否则面板会立刻收起。
+    // 新建后收起移动端抽屉:点新建的意图就是马上开始输入,
+    // 抽屉留着反而挡住空白对话(桌面端无抽屉,置 null 无副作用)。
+    setMobilePanel(null);
     navigate("/session");
   }, [navigate]);
 
