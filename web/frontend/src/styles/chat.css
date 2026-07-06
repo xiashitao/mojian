@@ -273,15 +273,9 @@
     max-width: 48px;
   }
 
-  /* iOS Safari 在 input/textarea 字号 < 16px 时会自动缩放页面以放大输入框,
-     体验是「点击输入框后页面被放大且无法还原」。把移动端输入字号
-     提到 16px 即可避免整个缩放行为(Apple 官方推荐做法),
-     桌面端保留 14px 观感不变。覆盖所有真实挂载的输入框:
-     .auth-input(登录弹窗)、.composer__input(对话输入框)。 */
-  .auth-input,
-  .composer__input {
-    font-size: 16px;
-  }
+  /* iOS 防缩放的 16px 输入框字号规则在文件末尾的同名媒体查询里:
+     .auth-input/.composer__input 的基础规则(14px)定义在本块之后,
+     媒体查询不提升优先级,写在这里会被后来的基础规则盖掉。 */
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1195,6 +1189,16 @@
     align-items: flex-end;
     gap: 6px;
     padding: 6px;
+  }
+
+  /* iOS Safari 在 input/textarea 字号 < 16px 时会自动缩放页面以放大输入框,
+     体验是「点击输入框后页面被放大且无法还原」。把移动端输入字号
+     提到 16px 即可避免整个缩放行为(Apple 官方推荐做法),
+     桌面端保留 14px 观感不变。此规则必须位于 .auth-input/.composer__input
+     基础规则(14px)之后:媒体查询不提升优先级,同优先级按出现顺序取后者。 */
+  .auth-input,
+  .composer__input {
+    font-size: 16px;
   }
 
   .composer__input {
