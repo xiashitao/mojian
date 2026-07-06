@@ -13,9 +13,13 @@ export function ChatHeader({ onToggleMobilePanel }: ChatHeaderProps) {
         type="button"
         className="chat-header__nav"
         onClick={onToggleMobilePanel}
-        aria-label="案卷"
+        aria-label="打开对话记录"
       >
-        案
+        {/* 侧栏图标:带分栏线的面板。此前是单字「案」,脱离「案卷」上下文后不可读。 */}
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="3" width="12" height="10" rx="1.5" />
+          <path d="M6 3v10" />
+        </svg>
       </button>
       <div className="chat-header__title">
         <span className="chat-header__mark">Kairos</span>
