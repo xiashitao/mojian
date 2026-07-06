@@ -36,6 +36,19 @@ export function ArchiveSidebar({
           <KairosLogo size={32} className="archive__brand-logo" />
           <span className="archive__brand-name">Kairos</span>
         </button>
+        {/* 移动端专用:品牌行右侧的新对话入口(桌面端隐藏,用下方 archive__head 的按钮)。
+            省一行高度,也符合移动端抽屉的通用布局。 */}
+        <button
+          type="button"
+          className="archive__brand-new"
+          onClick={onNew}
+          aria-label="新对话"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 3H4A1.5 1.5 0 0 0 2.5 4.5v7A1.5 1.5 0 0 0 4 13h7a1.5 1.5 0 0 0 1.5-1.5V8" />
+            <path d="M11.4 2.4 13.6 4.6l-5.3 5.3H6.1V7.7z" />
+          </svg>
+        </button>
         <button
           type="button"
           className="panel-collapse panel-collapse--archive"

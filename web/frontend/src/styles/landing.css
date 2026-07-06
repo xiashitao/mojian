@@ -56,6 +56,16 @@
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
   }
 
+  /* 抽屉模式:新对话入口挪到品牌行右侧(图标按钮),隐藏原来整行的
+     「＋ 新对话」,给对话列表省出一行高度。 */
+  .archive__brand-new {
+    display: flex;
+  }
+
+  .archive__head {
+    display: none;
+  }
+
   /* invisible tap-catcher: closes the drawer on outside tap, no dim / no blur.
      z-index 以 .oracle-body(z-index:2 的层叠上下文)为准:遮罩必须渲染在
      main 内部才能垫在抽屉(.archive, z-index:50)之下——放到 main 外面会

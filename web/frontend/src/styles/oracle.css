@@ -614,6 +614,28 @@
   letter-spacing: 0.02em;
 }
 
+/* 品牌行右侧的新对话图标按钮:仅移动端抽屉显示(landing.css 的
+   max-width:1024 块里打开),桌面端用下方 archive__head 的文字按钮。 */
+.archive__brand-new {
+  display: none;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--rule-line);
+  border-radius: 8px;
+  color: var(--bone-300);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.archive__brand-new:hover {
+  border-color: var(--cinnabar);
+  color: var(--cinnabar);
+}
+
 .archive__head {
   display: flex;
   align-items: center;
