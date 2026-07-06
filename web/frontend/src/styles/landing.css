@@ -56,7 +56,10 @@
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
   }
 
-  /* invisible tap-catcher: closes the drawer on outside tap, no dim / no blur */
+  /* invisible tap-catcher: closes the drawer on outside tap, no dim / no blur.
+     z-index 以 .oracle-body(z-index:2 的层叠上下文)为准:遮罩必须渲染在
+     main 内部才能垫在抽屉(.archive, z-index:50)之下——放到 main 外面会
+     全局盖住抽屉,抽屉内按钮全部失灵(详见 SessionPage.tsx 内注释)。 */
   .oracle__scrim {
     position: fixed;
     inset: 0;

@@ -96,23 +96,30 @@ export default function SessionPage() {
             onStop={stop}
           />
         </section>
-      </main>
 
-      {mobilePanel && (
-        <div
-          className="oracle__scrim"
-          /*
-           * 移动端用 onPointerDown 关闭,不用 onClick。
-           * 原因:点「案」按钮展开抽屉时,遮罩瞬间出现,移动端 ~300ms 的延迟
-           * click 事件会落到刚出现的遮罩上,误触发关闭(ghost click),
-           * 表现为「点案展开 → 抽屉立刻被关」或「点抽屉内按钮 → 抽屉被关」。
-           * PointerDown 在触摸按下瞬间触发,早于 ghost click,且只对真实手指/鼠标
-           * 按压生效,能干净避开这个问题。
-           */
-          onPointerDown={() => setMobilePanel(null)}
-          aria-hidden
-        />
-      )}
+        {mobilePanel && (
+          <div
+            className="oracle__scrim"
+            /*
+             * 位置:必须渲染在 main(.oracle-body)内部。.oracle-body 有
+             * z-index:2,是一个层叠上下文;抽屉 .archive 的 z-index:50 只在
+             * 这个上下文内有效。若遮罩放在 main 外面(z-index:45 对全局),
+             * 会整个盖住 main 连同抽屉,抽屉内所有按钮都点不到——点「新对话」
+             * 变成关抽屉。放在 main 内部,45 < 50,遮罩正好垫在抽屉之下、
+             * 聊天区之上。
+             *
+             * 事件:用 onPointerDown 关闭,不用 onClick。
+             * 原因:点「案」按钮展开抽屉时,遮罩瞬间出现,移动端 ~300ms 的延迟
+             * click 事件会落到刚出现的遮罩上,误触发关闭(ghost click),
+             * 表现为「点案展开 → 抽屉立刻被关」或「点抽屉内按钮 → 抽屉被关」。
+             * PointerDown 在触摸按下瞬间触发,早于 ghost click,且只对真实手指/鼠标
+             * 按压生效,能干净避开这个问题。
+             */
+            onPointerDown={() => setMobilePanel(null)}
+            aria-hidden
+          />
+        )}
+      </main>
 
       {authPrompt && (
         <AuthModal
