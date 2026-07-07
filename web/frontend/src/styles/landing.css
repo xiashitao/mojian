@@ -798,6 +798,30 @@
   transform: translateY(-2px);
 }
 
+/* ── footer: disclaimer + copyright ── */
+.landing__footer {
+  padding: 26px 24px calc(28px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--rule-line);
+  text-align: center;
+}
+
+.landing__disclaimer {
+  max-width: 560px;
+  margin: 0 auto 10px;
+  font-family: var(--font-cn);
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--bone-500);
+}
+
+.landing__copyright {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--bone-500);
+}
+
 /* ── light theme tweaks for story ── */
 [data-theme="light"] .demo {
   background: var(--ink-900);

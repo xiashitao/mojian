@@ -398,6 +398,15 @@ export default function LandingPage() {
         </section>
       </main>
 
+      <footer className="landing__footer">
+        <p className="landing__disclaimer">
+          免责声明：Kairos 的分析基于传统命理文化，内容仅供参考与文化体验，
+          不构成医疗、法律、投资、心理咨询等专业建议；涉及重大决策，
+          请结合自身实际情况独立判断。
+        </p>
+        <p className="landing__copyright">© 2026 Kairos</p>
+      </footer>
+
       {authOpen && (
         <AuthModal
           onClose={() => setAuthOpen(false)}
