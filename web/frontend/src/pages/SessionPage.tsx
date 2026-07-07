@@ -73,6 +73,7 @@ export default function SessionPage() {
             onToggleMobilePanel={() =>
               setMobilePanel(mobilePanel === "archive" ? null : "archive")
             }
+            onHome={goHome}
           />
           <ChatContextBar
             topic={currentTopic ?? currentConv?.topic}

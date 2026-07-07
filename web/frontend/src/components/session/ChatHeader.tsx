@@ -3,10 +3,11 @@ import { AccountMenu } from "../auth/AccountMenu";
 
 export interface ChatHeaderProps {
   onToggleMobilePanel: () => void;
+  onHome: () => void;
 }
 
 /** Top bar of the chat column. The brand mark only shows on mobile (drawer). */
-export function ChatHeader({ onToggleMobilePanel }: ChatHeaderProps) {
+export function ChatHeader({ onToggleMobilePanel, onHome }: ChatHeaderProps) {
   return (
     <header className="chat-header">
       <button
@@ -21,10 +22,16 @@ export function ChatHeader({ onToggleMobilePanel }: ChatHeaderProps) {
           <path d="M6 3v10" />
         </svg>
       </button>
-      <div className="chat-header__title">
+      {/* 标题即返回首页入口:移动端没有别的常驻首页入口,点品牌回首页是通用预期。 */}
+      <button
+        type="button"
+        className="chat-header__title"
+        onClick={onHome}
+        aria-label="返回首页"
+      >
         <span className="chat-header__mark">Kairos</span>
         <span className="chat-header__sub">看清局势 · 把握时机</span>
-      </div>
+      </button>
       <div className="chat-header__actions">
         <AccountMenu />
         <ThemeSwitcher />

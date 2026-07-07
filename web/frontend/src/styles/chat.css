@@ -43,12 +43,23 @@
   color: var(--cinnabar);
 }
 
+/* 是 button(点击返回首页):重置原生按钮外观,保持原有排版。 */
 .chat-header__title {
   display: flex;
   flex-direction: column;
   gap: 1px;
   line-height: 1.15;
   margin-right: auto;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.chat-header__title:hover {
+  opacity: 0.78;
 }
 
 .chat-header__mark {
