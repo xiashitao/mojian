@@ -63,6 +63,12 @@ class Settings(BaseSettings):
     profile_enabled: bool = True
     profile_update_interval: int = 3  # 每 N 轮触发一次更新
 
+    # 火山引擎大模型 ASR(语音输入)。两种鉴权填其一,新版优先;
+    # 都不填则 /api/asr/enabled 返回 false,前端不显示麦克风按钮。
+    volc_asr_api_key: str = ""  # 新版控制台:单个 API Key
+    volc_asr_app_id: str = ""  # 旧版控制台:App ID
+    volc_asr_access_token: str = ""  # 旧版控制台:Access Token
+
     class Config:
         env_file = str(WEB_DIR / ".env")
         env_file_encoding = "utf-8"

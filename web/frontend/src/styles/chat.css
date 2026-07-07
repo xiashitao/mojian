@@ -1318,6 +1318,79 @@
   color: var(--bone-400);
 }
 
+/* ── Composer: 语音输入 ───────────────────────────── */
+.composer__mic {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--rule-line-bright);
+  border-radius: 50%;
+  color: var(--bone-300);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.composer__mic:hover:not(:disabled) {
+  color: var(--cinnabar);
+  border-color: var(--cinnabar);
+}
+
+.composer__mic:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 录音中:朱砂实底 + 呼吸脉冲,状态一眼可辨 */
+.composer__mic.is-recording {
+  background: var(--cinnabar);
+  border-color: var(--cinnabar);
+  color: var(--bone-100);
+  animation: mic-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes mic-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(198, 77, 63, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(198, 77, 63, 0);
+  }
+}
+
+.composer__mic-spin {
+  animation: composer-spin 0.8s linear infinite;
+  transform-origin: center;
+}
+
+/* 识别/权限出错时的短暂提示,4s 自动消失 */
+.composer__mic-error {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  padding: 5px 14px;
+  background: var(--ink-800);
+  border: 1px solid var(--rule-line-bright);
+  border-radius: 999px;
+  font-family: var(--font-cn);
+  font-size: 12px;
+  color: var(--bone-200);
+  white-space: nowrap;
+  z-index: 5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer__mic.is-recording {
+    animation: none;
+  }
+}
+
 .composer__input::placeholder {
   color: var(--bone-500);
 }
