@@ -74,7 +74,11 @@ def recognize(audio_bytes: bytes, fmt: str = "wav") -> str:
             message = resp.headers.get("X-Api-Message", "")
             payload = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
-        raise AsrError(f"语音识别服务返回 HTTP {exc.code}") from exc
+        # 火山把具体错误放在响应头里(如鉴权失败/资源未开通),透传出来便于排障。
+        code = exc.headers.get("X-Api-Status-Code", "") if exc.headers else ""
+        message = exc.headers.get("X-Api-Message", "") if exc.headers else ""
+        detail = f"{code} {message}".strip() or f"HTTP {exc.code}"
+        raise AsrError(f"语音识别失败（{detail}）") from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise AsrError("语音识别服务连接失败") from exc
     except json.JSONDecodeError as exc:
