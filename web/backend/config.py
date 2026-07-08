@@ -32,6 +32,13 @@ class Settings(BaseSettings):
     jwt_expire_days: int = 30
     cookie_secure: bool = True  # set False in local dev (.env: COOKIE_SECURE=false)
 
+    # 统一登录网关(id.xsticq.com)接入：接入方与网关共享 cookie_name + jwt_secret +
+    # 用户库(database_path 指向网关同一 charts.db)即可互通登录态。默认值保持独立运行时
+    # 的旧行为；接入网关时在 .env 设 COOKIE_NAME=xsticq_session、COOKIE_DOMAIN=.xsticq.com、
+    # JWT_SECRET=<与网关同一值>。
+    cookie_name: str = "kairos_token"
+    cookie_domain: str = ""  # 空=host-only；接入网关设 .xsticq.com 以跨子域共享
+
     # 邮箱验证码登录（OTP）
     # log(开发：打印到日志) | smtp(通用 SMTP) | tencent(腾讯云邮件推送 API)
     # 注意：2026-03-02 起腾讯云对新开通的个人实名用户关闭 SMTP，只能走 tencent(API)。

@@ -13,7 +13,8 @@ from .database import get_db
 
 Role = Literal["user", "pro", "max", "admin"]
 
-COOKIE_NAME = "kairos_token"
+# 统一登录网关接入：cookie 名可配（默认沿用旧名，接入网关时 .env 设 xsticq_session）。
+COOKIE_NAME = settings.cookie_name
 COOKIE_MAX_AGE = settings.jwt_expire_days * 86400  # seconds
 
 
@@ -44,8 +45,11 @@ def create_token(user_id: str, role: Role) -> str:
 
 
 def set_auth_cookie(response: Response, token: str) -> None:
-    """Write JWT into a httpOnly, Secure, SameSite=Lax cookie."""
-    response.set_cookie(
+    """Write JWT into a httpOnly, Secure, SameSite=Lax cookie.
+
+    接入网关时 settings.cookie_domain 设为 .xsticq.com，令 Cookie 跨子域共享。
+    """
+    kwargs = dict(
         key=COOKIE_NAME,
         value=token,
         max_age=COOKIE_MAX_AGE,
@@ -53,15 +57,21 @@ def set_auth_cookie(response: Response, token: str) -> None:
         secure=settings.cookie_secure,
         samesite="lax",
     )
+    if settings.cookie_domain:
+        kwargs["domain"] = settings.cookie_domain
+    response.set_cookie(**kwargs)
 
 
 def clear_auth_cookie(response: Response) -> None:
-    response.delete_cookie(
+    kwargs = dict(
         key=COOKIE_NAME,
         httponly=True,
         secure=settings.cookie_secure,
         samesite="lax",
     )
+    if settings.cookie_domain:
+        kwargs["domain"] = settings.cookie_domain
+    response.delete_cookie(**kwargs)
 
 
 def _decode_token(token: str) -> dict:
