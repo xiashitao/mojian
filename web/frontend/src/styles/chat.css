@@ -1220,7 +1220,8 @@
 
   .composer__box {
     flex-direction: row;
-    align-items: flex-end;
+    /* 按钮与输入文字上下居中;flex-end 会把按钮贴到输入框底,单行时明显偏下。 */
+    align-items: center;
     gap: 6px;
     padding: 6px;
   }
