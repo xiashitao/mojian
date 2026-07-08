@@ -63,11 +63,21 @@ class Settings(BaseSettings):
     profile_enabled: bool = True
     profile_update_interval: int = 3  # 每 N 轮触发一次更新
 
-    # 火山引擎大模型 ASR(语音输入)。两种鉴权填其一,新版优先;
-    # 都不填则 /api/asr/enabled 返回 false,前端不显示麦克风按钮。
+    # 语音输入(ASR)。选用哪个 provider:volc(火山引擎) | groq(Whisper)。
+    # 切换只改这一个变量;两个 provider 的密钥可同时保留,互不影响。
+    # 选定的 provider 没配密钥则 /api/asr/enabled 返回 false,前端不显示麦克风。
+    asr_provider: str = "volc"
+
+    # 火山引擎大模型 ASR。两种鉴权填其一,新版优先。
     volc_asr_api_key: str = ""  # 新版控制台:单个 API Key
     volc_asr_app_id: str = ""  # 旧版控制台:App ID
     volc_asr_access_token: str = ""  # 旧版控制台:Access Token
+
+    # Groq(OpenAI 兼容的 Whisper 转录)。海外节点,国内访问需保证连通。
+    groq_api_key: str = ""
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    groq_asr_model: str = "whisper-large-v3"  # 或 whisper-large-v3-turbo(更快)
+    groq_asr_language: str = "zh"  # 指定语言更稳;留空则自动检测
 
     class Config:
         env_file = str(WEB_DIR / ".env")
