@@ -16,6 +16,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
+from ..agent import obs
 from ..config import settings
 
 _DEFAULT_RETRIES = 2
@@ -76,6 +77,10 @@ def active_model() -> str:
     return active_provider().model
 
 
+def _elapsed_ms(started: float) -> int:
+    return int((time.monotonic() - started) * 1000)
+
+
 def complete(
     system_prompt: str,
     user_prompt: str,
@@ -86,24 +91,57 @@ def complete(
     retries: int = _DEFAULT_RETRIES,
     provider: Provider | None = None,
     model: str | None = None,
+    trace_sink: obs.TraceSink | None = None,
 ) -> str:
-    """Non-streaming chat completion; returns the content string (with retries)."""
+    """Non-streaming chat completion; returns the content string (with retries).
+
+    trace_sink(可选):传入则把这次调用记一个 obs.Span(模型/延迟/token/重试)。
+    """
     prov = provider or active_provider()
+    mdl = model or prov.model
     req = _build_request(system_prompt, user_prompt, provider=prov, model=model,
                          temperature=temperature, stream=False, json_object=json_object)
+    started = time.monotonic()
+    attempts = {"n": 0}
+    usage: dict[str, Any] = {}
 
     def attempt() -> str:
+        attempts["n"] += 1
         with _open(req, timeout) as resp:
             body = json.loads(resp.read().decode("utf-8"))
         try:
-            return body["choices"][0]["message"]["content"]
+            content = body["choices"][0]["message"]["content"]
         except (KeyError, IndexError) as e:
             raise LLMError(
                 f"Bad response shape: {json.dumps(body, ensure_ascii=False)[:500]}",
                 retryable=False,
             ) from e
+        usage.update(body.get("usage") or {})
+        return content
 
-    return _with_retry(attempt, retries)
+    def _span(*, ok: bool, error: str | None, content: str) -> obs.Span:
+        return obs.Span(
+            kind="llm", name="llm.complete", ok=ok, error=error,
+            latency_ms=_elapsed_ms(started), attempts=attempts["n"],
+            attributes={
+                "provider": prov.name, "model": mdl, "stream": False,
+                "system_chars": len(system_prompt), "user_chars": len(user_prompt),
+                "completion_chars": len(content),
+                "prompt_tokens": usage.get("prompt_tokens"),
+                "completion_tokens": usage.get("completion_tokens"),
+                "total_tokens": usage.get("total_tokens"),
+                "user_preview": obs.preview(user_prompt),
+                "completion_preview": obs.preview(content),
+            },
+        )
+
+    try:
+        content = _with_retry(attempt, retries)
+    except LLMError as e:
+        obs.emit(trace_sink, _span(ok=False, error=str(e), content=""))
+        raise
+    obs.emit(trace_sink, _span(ok=True, error=None, content=content))
+    return content
 
 
 def stream(
@@ -115,18 +153,33 @@ def stream(
     retries: int = _DEFAULT_RETRIES,
     provider: Provider | None = None,
     model: str | None = None,
+    trace_sink: obs.TraceSink | None = None,
 ) -> Iterator[str]:
     """Streaming chat completion. Retries only the connection (pre-stream).
 
     Once chunks flow we never retry (that would duplicate output); a mid-stream
     failure surfaces as LLMError so callers can fall back to a template.
+
+    trace_sink(可选):流结束(正常/异常/被关闭)时在 finally 里记一个 span——
+    延迟、产出字数、token(靠 stream_options.include_usage 拿最后一帧的 usage)。
     """
     prov = provider or active_provider()
+    mdl = model or prov.model
     req = _build_request(system_prompt, user_prompt, provider=prov, model=model,
                          temperature=temperature, stream=True, json_object=False)
+    started = time.monotonic()
+    attempts = {"n": 0}
+    chars = 0
+    usage: dict[str, Any] = {}
+    ok = True
+    error: str | None = None
 
-    resp = _with_retry(lambda: _open(req, timeout), retries)
+    def _connect():
+        attempts["n"] += 1
+        return _open(req, timeout)
+
     try:
+        resp = _with_retry(_connect, retries)
         with resp:
             for raw_line in resp:
                 line = raw_line.decode("utf-8").strip()
@@ -137,13 +190,39 @@ def stream(
                     return
                 try:
                     chunk = json.loads(payload_str)
-                    content = chunk["choices"][0]["delta"].get("content", "")
-                    if content:
-                        yield content
-                except (json.JSONDecodeError, KeyError, IndexError):
+                except json.JSONDecodeError:
                     continue
+                if chunk.get("usage"):  # include_usage 的最后一帧,choices 为空
+                    usage = chunk["usage"]
+                choices = chunk.get("choices") or []
+                if not choices:
+                    continue
+                content = choices[0].get("delta", {}).get("content", "")
+                if content:
+                    chars += len(content)
+                    yield content
+    except LLMError as e:
+        ok = False
+        error = str(e)
+        raise
     except urllib.error.URLError as e:
-        raise LLMError(f"Stream interrupted: {e.reason}", retryable=False) from e
+        ok = False
+        error = f"Stream interrupted: {e.reason}"
+        raise LLMError(error, retryable=False) from e
+    finally:
+        obs.emit(trace_sink, obs.Span(
+            kind="llm", name="llm.stream", ok=ok, error=error,
+            latency_ms=_elapsed_ms(started), attempts=attempts["n"],
+            attributes={
+                "provider": prov.name, "model": mdl, "stream": True,
+                "system_chars": len(system_prompt), "user_chars": len(user_prompt),
+                "completion_chars": chars,
+                "prompt_tokens": usage.get("prompt_tokens"),
+                "completion_tokens": usage.get("completion_tokens"),
+                "total_tokens": usage.get("total_tokens"),
+                "user_preview": obs.preview(user_prompt),
+            },
+        ))
 
 
 def _build_request(
@@ -168,6 +247,9 @@ def _build_request(
     }
     if stream:
         payload["stream"] = True
+        # 让最后一帧带 usage(token 数),供追踪记录;不影响 prompt、不破坏前缀缓存。
+        # DeepSeek/OpenAI/Groq 均支持,不支持的 provider 会忽略此字段。
+        payload["stream_options"] = {"include_usage": True}
     if json_object:
         payload["response_format"] = {"type": "json_object"}
     headers = {

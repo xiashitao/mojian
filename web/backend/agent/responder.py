@@ -163,6 +163,7 @@ def stream_consultation_reply(
     memory_notes: list[dict[str, Any]] | None = None,
     profile: UserProfile | None = None,
     tone: str | None = None,
+    trace_sink=None,
 ) -> Iterator[tuple[str, ChatState | None, dict[str, Any] | None]]:
     """Stream the consultation reply chunk by chunk.
 
@@ -205,7 +206,8 @@ def stream_consultation_reply(
     collected = []
     try:
         for chunk in stream(prompt["system_prompt"], prompt["user_prompt"],
-                                      temperature=0.7, timeout=120):
+                                      temperature=0.7, timeout=120,
+                                      trace_sink=trace_sink):
             collected.append(chunk)
             yield chunk, None, None
     except LLMError:
@@ -223,7 +225,8 @@ def stream_consultation_reply(
 
     full_reply = "".join(collected)
     grounding_violations = check_grounding(full_reply, context)
-    reflection = reflect_on_reply(actual_topic, history, full_reply, user_message=user_message)
+    reflection = reflect_on_reply(actual_topic, history, full_reply,
+                                  user_message=user_message, trace_sink=trace_sink)
     followups = reflection["followups"]
     state = ChatState(topic=actual_topic, needs_more_info=False,
                      missing_fields=[], suggested_followups=followups)
@@ -465,6 +468,7 @@ def reflect_on_reply(
     *,
     user_message: str = "",
     count: int = 3,
+    trace_sink=None,
 ) -> dict[str, Any]:
     """One LLM call after the reply: dynamic follow-ups + a one-line conclusion.
 
@@ -499,7 +503,8 @@ def reflect_on_reply(
     )
     try:
         data = json.loads(complete(system_prompt, user_prompt, temperature=0.6,
-                                   provider=fast_provider()))  # follow-ups → cheap model
+                                   provider=fast_provider(),  # follow-ups → cheap model
+                                   trace_sink=trace_sink))
         if isinstance(data, dict):
             fups = data.get("followups")
             if isinstance(fups, list):

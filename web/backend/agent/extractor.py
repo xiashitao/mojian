@@ -129,12 +129,12 @@ _INJECTION_RE = re.compile(
 )
 
 
-def extract_message(message: str) -> ExtractionResult:
+def extract_message(message: str, *, trace_sink=None) -> ExtractionResult:
     text = message.strip()
     if _INJECTION_RE.search(text):
         return ExtractionResult(intent="out_of_scope", topic=None,
                                 birth_info=BirthInfo(), raw_text=message)
-    llm_result = _extract_with_llm(text)
+    llm_result = _extract_with_llm(text, trace_sink=trace_sink)
     if llm_result is not None:
         return llm_result
     topic = _detect_topic(text)
@@ -148,7 +148,7 @@ def extract_message(message: str) -> ExtractionResult:
     )
 
 
-def _extract_with_llm(text: str) -> ExtractionResult | None:
+def _extract_with_llm(text: str, *, trace_sink=None) -> ExtractionResult | None:
     if not is_configured():
         return None
     try:
@@ -157,6 +157,7 @@ def _extract_with_llm(text: str) -> ExtractionResult | None:
             text,
             temperature=0.0,
             provider=fast_provider(),  # mechanical routing → cheap model
+            trace_sink=trace_sink,
         )
         data = json.loads(raw)
     except (LLMError, json.JSONDecodeError, ValueError):

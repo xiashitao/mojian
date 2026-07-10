@@ -12,9 +12,9 @@ from .extractor import extract_message, merge_birth_info
 from .models import Action, BirthInfo, ConversationState, RouteDecision, Topic
 
 
-def route(message: str, state: ConversationState) -> RouteDecision:
+def route(message: str, state: ConversationState, *, trace_sink=None) -> RouteDecision:
     """Decide the next action for a user message given the conversation state."""
-    extraction = extract_message(message)
+    extraction = extract_message(message, trace_sink=trace_sink)
     birth_info = merge_birth_info(state.birth_info, extraction.birth_info)
     topic = extraction.topic or state.current_topic
     action = _action_for(extraction.intent, topic, birth_info, extraction.subject)

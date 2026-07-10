@@ -81,6 +81,9 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
         model=llm.active_model() if llm.is_configured() else "deterministic",
     )
     tracer = TraceWriter(run["id"])
+    # 外部调用(LLM/工具/MCP)的 span 收集器,显式传进调用链;
+    # 收尾时排入本轮 trace(见 finally)。将来接工具/MCP 也传这个 sink 即可。
+    spans: list = []
 
     intent: str | None = None
     topic: Topic | None = None
@@ -110,7 +113,7 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
             if remembered:
                 state.birth_info = merge_birth_info(remembered, state.birth_info)
 
-        decision = route(message, state)
+        decision = route(message, state, trace_sink=spans)
         intent = decision.intent
         topic = decision.topic
         merged_birth_info = decision.birth_info
@@ -252,6 +255,7 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
                 memory_notes=past_notes,
                 profile=current_profile,
                 tone=tone,
+                trace_sink=spans,
             ):
                 if chunk:
                     reply_parts.append(chunk)
@@ -330,6 +334,18 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
         assistant_message_id = assistant_message["id"]
         tracer.add("error", input_data={"message": message},
                    output_data={"error": error}, summary="Agent run failed.")
+
+    finally:
+        # 把本轮所有外部调用 span(LLM/工具/MCP)排入 trace,成功失败都记。
+        # best-effort:追踪写入出问题绝不能影响已经产出的回复。
+        for span in spans:
+            try:
+                tracer.add(span.step_type(),
+                           input_data=span.trace_input(),
+                           output_data=span.trace_output(),
+                           summary=span.summary())
+            except Exception:  # noqa: BLE001
+                pass
 
     repository.finish_agent_run(
         run["id"],
