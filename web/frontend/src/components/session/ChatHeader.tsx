@@ -4,10 +4,12 @@ import { AccountMenu } from "../auth/AccountMenu";
 export interface ChatHeaderProps {
   onToggleMobilePanel: () => void;
   onHome: () => void;
+  /** 仅管理员且有会话时提供:打开本会话的跨轮调用追踪。 */
+  onOpenTrace?: () => void;
 }
 
 /** Top bar of the chat column. The brand mark only shows on mobile (drawer). */
-export function ChatHeader({ onToggleMobilePanel, onHome }: ChatHeaderProps) {
+export function ChatHeader({ onToggleMobilePanel, onHome, onOpenTrace }: ChatHeaderProps) {
   return (
     <header className="chat-header">
       <button
@@ -33,6 +35,22 @@ export function ChatHeader({ onToggleMobilePanel, onHome }: ChatHeaderProps) {
         <span className="chat-header__sub">看清局势 · 把握时机</span>
       </button>
       <div className="chat-header__actions">
+        {onOpenTrace && (
+          <button
+            type="button"
+            className="chat-header__trace"
+            onClick={onOpenTrace}
+            aria-label="会话调用追踪"
+            title="会话调用追踪（管理员）"
+          >
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="4" cy="4" r="1.5" />
+              <circle cx="4" cy="12" r="1.5" />
+              <circle cx="12" cy="8" r="1.5" />
+              <path d="M4 5.5v5M5.4 4.7 10.6 7.3M5.4 11.3 10.6 8.7" />
+            </svg>
+          </button>
+        )}
         <AccountMenu />
         <ThemeSwitcher />
       </div>

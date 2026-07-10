@@ -137,3 +137,26 @@ def test_stream_chat_persists_llm_call_into_trace(monkeypatch, tmp_path):
     assert out["stream"] is False
     assert out["total_tokens"] == 11
     assert out["ok"] is True
+
+
+def test_conversation_runs_aggregate(monkeypatch, tmp_path):
+    """跨轮追踪:一段会话里每轮 run 的概要 + LLM 聚合,按时间正序。"""
+    from web.backend import database
+    from web.backend.agent import planner, repository
+
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "conv.db")
+    database.init_db()
+    body = {
+        "choices": [{"message": {"content": json.dumps({"intent": "smalltalk"})}}],
+        "usage": {"prompt_tokens": 8, "completion_tokens": 3, "total_tokens": 11},
+    }
+    monkeypatch.setattr(llm, "_open", lambda req, t: _FakeResp(json.dumps(body).encode()))
+
+    first = [json.loads(c) for c in planner.stream_chat("你好")]
+    conv_id = first[-1]["conversation_id"]
+    list(planner.stream_chat("在吗", conversation_id=conv_id))  # 同一会话第二轮
+
+    runs = repository.get_conversation_runs(conv_id)
+    assert [r["user_message"] for r in runs] == ["你好", "在吗"]  # 严格时间正序
+    assert all(r["llm_calls"] >= 1 for r in runs)
+    assert all(r["total_tokens"] == 11 for r in runs)

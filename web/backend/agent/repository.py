@@ -328,6 +328,55 @@ def get_analysis_package(analysis_id: str) -> dict | None:
         conn.close()
 
 
+def get_conversation_runs(conversation_id: str) -> list[dict]:
+    """一段会话里每一轮 run 的概要 + LLM 聚合(调用次数/总 token),按时间正序。
+
+    支撑跨轮追踪时间线:一眼看清整段对话每轮的意图/话题/状态/耗时/模型开销,
+    点某一轮再看它的完整调用链(get_analysis_package)。
+    token 用 SQLite json_extract 从 llm_call 步骤的 output_json 里就地累加。
+    """
+    conn = get_db()
+    try:
+        runs = conn.execute(
+            """SELECT r.id AS run_id, r.public_analysis_id AS analysis_id,
+                      r.status, r.intent, r.topic, r.latency_ms, r.started_at, r.error,
+                      m.content AS user_message
+               FROM agent_runs r
+               LEFT JOIN messages m ON m.id = r.trigger_message_id
+               WHERE r.conversation_id = ?
+               ORDER BY r.started_at ASC, r.rowid ASC""",
+            (conversation_id,),
+        ).fetchall()
+        result = []
+        for row in runs:
+            d = _row_to_dict(row)
+            stats = conn.execute(
+                """SELECT COUNT(*) AS llm_calls,
+                          COALESCE(SUM(CAST(
+                              json_extract(output_json, '$.total_tokens') AS INTEGER
+                          )), 0) AS total_tokens
+                   FROM run_traces
+                   WHERE run_id = ? AND step_type = 'llm_call'""",
+                (d["run_id"],),
+            ).fetchone()
+            msg = d.get("user_message") or ""
+            result.append({
+                "analysis_id": d["analysis_id"],
+                "status": d["status"],
+                "intent": d["intent"],
+                "topic": d["topic"],
+                "latency_ms": d["latency_ms"],
+                "started_at": d["started_at"],
+                "error": d["error"],
+                "user_message": msg if len(msg) <= 80 else msg[:80] + "…",
+                "llm_calls": stats["llm_calls"],
+                "total_tokens": stats["total_tokens"],
+            })
+        return result
+    finally:
+        conn.close()
+
+
 def _latest_trace_output(traces: list[dict], step_type: str) -> Any:
     for trace in reversed(traces):
         if trace.get("step_type") == step_type:

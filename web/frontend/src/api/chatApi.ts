@@ -133,3 +133,25 @@ export async function sendChatMessage(
 export function getChatAnalysis(analysisId: string): Promise<ChatAnalysis> {
   return apiGet<ChatAnalysis>(`/admin/analyses/${analysisId}`);
 }
+
+/** 一段会话里每轮 run 的概要 + LLM 聚合(跨轮追踪时间线)。Admin only. */
+export interface ConversationRun {
+  analysis_id: string;
+  status: string;
+  intent: string | null;
+  topic: string | null;
+  latency_ms: number | null;
+  started_at: string;
+  error: string | null;
+  user_message: string;
+  llm_calls: number;
+  total_tokens: number;
+}
+
+export function getConversationRuns(
+  conversationId: string,
+): Promise<{ runs: ConversationRun[] }> {
+  return apiGet<{ runs: ConversationRun[] }>(
+    `/admin/conversations/${conversationId}/runs`,
+  );
+}

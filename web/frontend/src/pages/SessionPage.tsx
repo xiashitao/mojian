@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { useChatSession } from "../hooks/useChatSession";
+import { useAuth } from "../auth";
 import { ArchiveRail } from "../components/session/ArchiveRail";
 import { ArchiveSidebar } from "../components/session/ArchiveSidebar";
 import { ChatHeader } from "../components/session/ChatHeader";
@@ -7,8 +9,12 @@ import { MessageList } from "../components/session/MessageList";
 import { Composer } from "../components/session/Composer";
 import { AuthModal } from "../components/auth/AuthModal";
 import { SubjectConfirmDialog } from "../components/session/SubjectConfirmDialog";
+import { ConversationTraceModal } from "../components/session/ConversationTraceModal";
 
 export default function SessionPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const [convTraceOpen, setConvTraceOpen] = useState(false);
   const {
     conversations,
     conversationId,
@@ -74,6 +80,11 @@ export default function SessionPage() {
               setMobilePanel(mobilePanel === "archive" ? null : "archive")
             }
             onHome={goHome}
+            onOpenTrace={
+              isAdmin && conversationId
+                ? () => setConvTraceOpen(true)
+                : undefined
+            }
           />
           <ChatContextBar
             topic={currentTopic ?? currentConv?.topic}
@@ -134,6 +145,13 @@ export default function SessionPage() {
           birthInfo={subjectConfirm.birthInfo}
           onCancel={cancelSubjectConfirm}
           onConfirm={confirmSubject}
+        />
+      )}
+
+      {convTraceOpen && conversationId && (
+        <ConversationTraceModal
+          conversationId={conversationId}
+          onClose={() => setConvTraceOpen(false)}
         />
       )}
     </div>
