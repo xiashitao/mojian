@@ -321,3 +321,134 @@
   display: none;
 }
 
+/* ── 调用追踪视图(管理员)───────────────────────────── */
+.trace-modal {
+  width: min(680px, 100vw);
+}
+
+.trace-head {
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--rule-line);
+}
+
+.trace-head__id {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--bone-400);
+  word-break: break-all;
+}
+
+.trace-head__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.trace-chip {
+  padding: 2px 9px;
+  border: 1px solid var(--rule-line-bright);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--bone-300);
+}
+
+.trace-chip--success {
+  border-color: rgba(22, 163, 74, 0.4);
+  color: #4ade80;
+}
+
+.trace-chip--failed {
+  border-color: var(--cinnabar);
+  color: var(--cinnabar);
+}
+
+.trace-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trace-step {
+  padding: 10px 12px;
+  background: var(--ink-950);
+  border: 1px solid var(--rule-line);
+  border-radius: 8px;
+}
+
+/* 模型调用:淡背景 + 高亮元信息,一眼从管线步骤里区分出来(不用侧边粗边)。 */
+.trace-step--llm {
+  background: var(--cinnabar-soft);
+}
+
+.trace-step--fail {
+  border-color: var(--cinnabar);
+}
+
+.trace-step__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.trace-step__idx {
+  flex-shrink: 0;
+  min-width: 18px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--bone-500);
+}
+
+.trace-step__type {
+  font-family: var(--font-cn);
+  font-size: 12px;
+  color: var(--bone-200);
+}
+
+.trace-step__meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--cinnabar);
+}
+
+.trace-step__summary {
+  margin-top: 5px;
+  padding-left: 26px;
+  font-family: var(--font-cn);
+  font-size: 11px;
+  color: var(--bone-400);
+  line-height: 1.5;
+}
+
+.trace-step__detail {
+  margin-top: 6px;
+  padding-left: 26px;
+}
+
+.trace-step__detail > summary {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--bone-500);
+  cursor: pointer;
+  user-select: none;
+}
+
+.trace-step__detail > summary:hover {
+  color: var(--cinnabar);
+}
+
+.trace-step__label {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bone-500);
+}
+

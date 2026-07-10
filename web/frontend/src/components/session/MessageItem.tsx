@@ -1,8 +1,11 @@
+import { useState } from "react";
 import Markdown from "react-markdown";
 import type { MessageFeedback, UiMessage } from "../../types/session";
 import { formatClock } from "../../utils/sessionFormat";
+import { useAuth } from "../../auth";
 import { KairosLogo } from "../KairosLogo";
 import { ChartCard } from "./ChartCard";
+import { TraceModal } from "./TraceModal";
 
 /**
  * CommonMark 的加粗定界符(flanking)规则在中文全角标点旁会失效:
@@ -33,6 +36,9 @@ export function MessageItem({
 }: MessageItemProps) {
   const { id, role, content, pending, error, analysis_id, followups, feedback } =
     message;
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const [traceOpen, setTraceOpen] = useState(false);
   const clock = formatClock(message.created_at);
   const showActions = !pending && role === "assistant" && !error;
   const showFollowups =
@@ -64,8 +70,24 @@ export function MessageItem({
 
       {!pending && analysis_id && (
         <div className="message__meta">
-          <span className="message__id">{analysis_id}</span>
+          {isAdmin ? (
+            // 管理员:点 analysis id 打开该轮的调用追踪(每步 + 每次模型调用)。
+            <button
+              type="button"
+              className="message__id message__id--link"
+              onClick={() => setTraceOpen(true)}
+              title="查看调用追踪"
+            >
+              {analysis_id}
+            </button>
+          ) : (
+            <span className="message__id">{analysis_id}</span>
+          )}
         </div>
+      )}
+
+      {traceOpen && analysis_id && (
+        <TraceModal analysisId={analysis_id} onClose={() => setTraceOpen(false)} />
       )}
 
       {showActions && (
