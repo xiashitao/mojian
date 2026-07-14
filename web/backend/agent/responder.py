@@ -61,6 +61,49 @@ def check_grounding(reply: str, context: dict[str, Any]) -> list[str]:
     return violations
 
 
+class _GanzhiStreamFilter:
+    """流式净化：把命盘里出现过的干支（后台标记）从模型输出里剔掉，防止泄漏给用户。
+
+    干支泄漏是 eval 三大系统 bug 之一：prompt 三令五申「不报干支」仍压不住
+    （8 条命例 4 条漏）。check_grounding 只能事后记录，而回答是流式的、已经吐给
+    用户。这里在流上边吐边剔，作为确定性兜底。
+
+    只剔『这盘实际存在的干支串』——精确、几乎零误伤：一个命理干支（如壬寅）出现在
+    咨询正文里，必是照抄后台标记。干支恒为两字；跨 chunk 分割时最多缓存一个待定的
+    天干字（可能是下一个 chunk 才补齐地支的干支头）。check_grounding 仍对**原始**
+    输出打分，保留「模型本身是否还在泄漏」的回归信号（净化是给用户的护栏，不是给
+    模型的免罪）。"""
+
+    def __init__(self, chart_ganzhi: set[str]):
+        self._stems = {g[0] for g in chart_ganzhi}
+        self._re = (re.compile("|".join(re.escape(g) for g in chart_ganzhi))
+                    if chart_ganzhi else None)
+        self._pending = ""
+        self.removed = 0
+
+    def feed(self, chunk: str) -> str:
+        buf = self._pending + chunk
+        self._pending = ""
+        if buf and buf[-1] in self._stems:
+            self._pending = buf[-1]          # 可能是跨 chunk 干支的天干，先扣住
+            buf = buf[:-1]
+        return self._strip(buf)
+
+    def flush(self) -> str:
+        tail, self._pending = self._pending, ""
+        return self._strip(tail)
+
+    def _strip(self, s: str) -> str:
+        if not self._re or not s:
+            return s
+
+        def _drop(_m):
+            self.removed += 1
+            return ""
+
+        return self._re.sub(_drop, s)
+
+
 def build_missing_info_reply(topic: Topic | None, birth_info: BirthInfo) -> tuple[str, ChatState]:
     missing = birth_info.complete_missing_fields()
     topic_text = topic_cn(topic)
@@ -203,13 +246,20 @@ def stream_consultation_reply(
                                          memory_notes=memory_notes,
                                          profile=profile,
                                          tone=tone)
-    collected = []
+    # 只剔『这盘实际出现过的干支』——直接从 prompt 正文(含命盘 JSON)扫出精确集合，
+    # 就是模型唯一可能照抄的那些后台标记。
+    gz_filter = _GanzhiStreamFilter(set(_GANZHI_RE.findall(prompt["user_prompt"])))
+    collected = []   # 原始模型输出(供 grounding 信号)
+    shown = []       # 净化后输出(用户实际所见 / 落库)
     try:
         for chunk in stream(prompt["system_prompt"], prompt["user_prompt"],
                                       temperature=0.7, timeout=120,
                                       trace_sink=trace_sink):
             collected.append(chunk)
-            yield chunk, None, None
+            clean = gz_filter.feed(chunk)
+            if clean:
+                shown.append(clean)
+                yield clean, None, None
     except LLMError:
         # fallback to template on stream error
         if clarify_previous:
@@ -223,17 +273,25 @@ def stream_consultation_reply(
         yield reply, state, {"mode": "deterministic_template_fallback", "topic": actual_topic}
         return
 
-    full_reply = "".join(collected)
+    tail = gz_filter.flush()
+    if tail:
+        shown.append(tail)
+        yield tail, None, None
+
+    full_reply = "".join(collected)        # 原始:含可能泄漏的干支
+    clean_reply = "".join(shown)           # 净化:用户所见、落库、供 judge/追问
+    # grounding 仍打在原始输出上——净化是护栏,不掩盖『模型本身还在泄漏』这个事实。
     grounding_violations = check_grounding(full_reply, context)
-    reflection = reflect_on_reply(actual_topic, history, full_reply,
+    reflection = reflect_on_reply(actual_topic, history, clean_reply,
                                   user_message=user_message, trace_sink=trace_sink)
     followups = reflection["followups"]
     state = ChatState(topic=actual_topic, needs_more_info=False,
                      missing_fields=[], suggested_followups=followups)
     generation_trace = {"mode": "deepseek_stream", "topic": actual_topic,
-                        "reply": full_reply, "raw_response": full_reply,
+                        "reply": clean_reply, "raw_response": full_reply,
                         "followups": followups, "conclusion": reflection["conclusion"],
-                        "grounding_violations": grounding_violations}
+                        "grounding_violations": grounding_violations,
+                        "sanitized_ganzhi_count": gz_filter.removed}
     yield "", state, generation_trace
 
 
