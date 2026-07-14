@@ -92,3 +92,50 @@ class TestLiunianAcrossDayun:
         )
         assert isinstance(f.relations, tuple)
         assert all(isinstance(r, str) for r in f.relations)
+
+
+class TestRelationPolarity:
+    """论行运·关系方向标（子平真诠）：冲去忌神/成用神局为利，冲去喜用/成克用局为不利。
+    只对极性单一确定的两类表态；六合/刑/害与『用神未定』一律不表态。"""
+
+    def _rels(self, dm, yong, stem, branch, natal):
+        f = assess_pillar_facts(dm, yong, _pillar(stem, branch), natal_branches=natal)
+        return f.relations
+
+    def test_chong_jishen_is_favorable(self):
+        # 偏印格(戊)：偏财=忌神(亥本气壬=偏财)。巳冲命局亥 → 冲去忌神，利。
+        rels = self._rels("戊", "偏印", "丁", "巳", ("亥",))
+        assert any("冲去忌神，对你有利" in r for r in rels), rels
+
+    def test_chong_xiyong_is_unfavorable(self):
+        # 偏印格(戊)：七杀=相神/喜用(寅本气甲=七杀)。申冲命局寅 → 冲去喜用，不利。
+        rels = self._rels("戊", "偏印", "庚", "申", ("寅",))
+        assert any("冲去喜用，对你不利" in r for r in rels), rels
+
+    def test_yong_ju_is_favorable(self):
+        # 真盘回归：偏印格用神五行=火，大运壬寅与命局午半合火局 → 成用神局，利。
+        c = cast_chart(datetime(1997, 5, 16, 8, 0), longitude=117.8,
+                       gender="male", reference_year=2026)
+        d = diagnose(c)
+        f = assess_pillar_facts(
+            c.day_master, d.yong_shen.ten_god, c.current_period.luck_pillar.pillar,
+            natal_branches=tuple(p.branch for p in c.four_pillars),
+        )
+        assert any("用神五行），对你有利" in r for r in f.relations), f.relations
+
+    def test_ke_yong_ju_is_unfavorable(self):
+        # 偏印格用神五行=火；子与命局申、辰成三合水局，水克火 → 成克用局，不利。
+        rels = self._rels("戊", "偏印", "甲", "子", ("申", "辰"))
+        assert any("克用神五行），对你不利" in r for r in rels), rels
+
+    def test_no_polarity_when_yong_unknown(self):
+        # 用神未定：关系仍记事实，但一律不表态利/不利（喜忌待判）。
+        rels = self._rels("戊", None, "庚", "申", ("寅",))
+        assert rels  # 冲命局寅 仍在
+        assert not any("对你有利" in r or "对你不利" in r for r in rels), rels
+
+    def test_liuhe_and_xing_stay_untagged(self):
+        # 六合/刑方向不单一，只记事实、不表态（留给模型权衡）。
+        rels = self._rels("戊", "偏印", "丁", "巳", ("申",))  # 巳申六合(+相刑)
+        assert any("六合" in r for r in rels), rels
+        assert not any("六合" in r and ("对你有利" in r or "对你不利" in r) for r in rels), rels

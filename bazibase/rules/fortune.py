@@ -194,6 +194,33 @@ def _el_tag(element: str, yong_el: str | None, ke_yong: str | None) -> str:
     return ""
 
 
+# ── 论行运·关系的「方向」断语（子平真诠：论行运）──────────────────────────────
+# 沈孝瞻《子平真诠·论行运》：行运之美恶，全在成格/破格。据此，只对**极性单一确定**
+# 的两类关系补一个方向标（利/不利），把模型「每条关系都要自己推利不利」的负担卸掉，
+# 只留最后的「净顺逆」权衡给它（确定交引擎、不确定交模型）。
+#   · 冲：冲去命局忌神为美、冲去命局喜用为忌。
+#   · 会成局：会成用神五行之局为美、会成克用神五行之局为忌。
+# 刻意**只给方向、不给力度**——引擎不判旺衰强弱，「帮多少、够不够扭转全局」仍归上层。
+# 六合（合绊/合去两义）、刑、害（开库等争议用法）方向不单一，一律不标，留给模型权衡。
+
+def _chong_polarity(role_tag: str) -> str:
+    """冲的方向：冲去忌神→利、冲去喜用→不利。role_tag 为空(中性/用神未定)则不表态。"""
+    if "命局忌神" in role_tag:
+        return "，冲去忌神，对你有利"
+    if "命局喜用" in role_tag:
+        return "，冲去喜用，对你不利"
+    return ""
+
+
+def _ju_polarity(element: str, yong_el: str | None, ke_yong: str | None) -> str:
+    """会成局的方向：成用神五行局→利、成克用神五行局→不利。其余五行不表态。"""
+    if yong_el and element == yong_el:
+        return "，对你有利"
+    if ke_yong and element == ke_yong:
+        return "，对你不利"
+    return ""
+
+
 def _pillar_relations(
     subject_branch: str, *, natal_branches: tuple[str, ...],
     luck_branch: str | None, day_master: str, yong: str | None,
@@ -202,7 +229,10 @@ def _pillar_relations(
 ) -> list[str]:
     """确定的关系事实：subject 支 与 命局四支 / 当前大运支 的 冲/刑/害/六合/三合/三会。
 
-    标注被作用支的喜忌角色（确定），但**不下"吉/凶"判断**——那交给上层综合。
+    标注被作用支的喜忌角色（确定）。对极性单一确定的两类——冲（冲忌神/冲喜用）与
+    会成局（成用神局/成克用局）——依《子平真诠·论行运》补一个**方向**标（利/不利）；
+    六合、刑、害方向不单一，只记事实、不表态。方向标只给利/不利，**不给力度**，
+    净顺逆仍交上层综合。
     """
     notes: list[str] = []
     targets: list[tuple[str, str]] = [(nb, "命局") for nb in dict.fromkeys(natal_branches)]
@@ -215,7 +245,8 @@ def _pillar_relations(
     for tb, label in targets:
         pair = frozenset({subject_branch, tb})
         if len(pair) == 2 and pair in LIU_CHONG_TABLE:
-            notes.append(f"冲{label}{tb}{tag(tb)}")
+            t = tag(tb)
+            notes.append(f"冲{label}{tb}{t}{_chong_polarity(t)}")
             continue  # 同一支以冲为重，不再记刑/害
         if pair in _XING_PAIRS or (subject_branch == tb and subject_branch in ZI_XING_BRANCHES):
             notes.append(f"与{label}{tb}相刑")
@@ -238,10 +269,12 @@ def _pillar_relations(
             present = others & pool
             if present == others:
                 notes.append(f"与{'、'.join(sorted(present))}成{kind}{element}局"
-                             f"{_el_tag(element, yong_el, ke_yong)}")
+                             f"{_el_tag(element, yong_el, ke_yong)}"
+                             f"{_ju_polarity(element, yong_el, ke_yong)}")
             elif allow_half and len(present) == 1:
                 notes.append(f"与{next(iter(present))}半合{element}局"
-                             f"{_el_tag(element, yong_el, ke_yong)}")
+                             f"{_el_tag(element, yong_el, ke_yong)}"
+                             f"{_ju_polarity(element, yong_el, ke_yong)}")
     return notes
 
 
