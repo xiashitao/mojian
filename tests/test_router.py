@@ -18,8 +18,11 @@ def test_incomplete_birth_info_gates_everything():
 
 
 def test_ask_topic_when_complete_but_no_topic():
+    # 只有「刚报完生辰、没提问」(collect_birth_info)才反问方向;真实但未
+    # 分类出话题的问题(intent=unknown,如「我的学历」)应直接回答而不是
+    # 弹回去——791e5a4 的路由修复,测试于 2026-07-17 补同步。
     assert _action_for("collect_birth_info", None, COMPLETE) == "ask_topic"
-    assert _action_for("unknown", None, COMPLETE) == "ask_topic"
+    assert _action_for("unknown", None, COMPLETE) == "consult"
 
 
 def test_consult_and_clarify():
