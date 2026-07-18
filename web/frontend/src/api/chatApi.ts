@@ -146,6 +146,7 @@ export interface ConversationRun {
   user_message: string;
   llm_calls: number;
   total_tokens: number;
+  cost: number | null; // 元;null=无定价模型或该轮无 LLM 开销
 }
 
 export function getConversationRuns(

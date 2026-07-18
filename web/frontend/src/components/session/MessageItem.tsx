@@ -68,21 +68,18 @@ export function MessageItem({
         <div className="message__time">{clock}</div>
       )}
 
-      {!pending && analysis_id && (
+      {/* analysis_id 只对管理员显示(会话内的调用追踪入口);普通用户不再
+          展示这串内部 ID——定位问题走反馈闭环:点踩 → 运营后台直达该轮链路。 */}
+      {!pending && analysis_id && isAdmin && (
         <div className="message__meta">
-          {isAdmin ? (
-            // 管理员:点 analysis id 打开该轮的调用追踪(每步 + 每次模型调用)。
-            <button
-              type="button"
-              className="message__id message__id--link"
-              onClick={() => setTraceOpen(true)}
-              title="查看调用追踪"
-            >
-              {analysis_id}
-            </button>
-          ) : (
-            <span className="message__id">{analysis_id}</span>
-          )}
+          <button
+            type="button"
+            className="message__id message__id--link"
+            onClick={() => setTraceOpen(true)}
+            title="查看调用追踪"
+          >
+            {analysis_id}
+          </button>
         </div>
       )}
 

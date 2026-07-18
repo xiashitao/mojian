@@ -325,6 +325,7 @@ def recent_runs(limit: int = 20) -> list[dict]:
     try:
         rows = conn.execute(
             """SELECT r.id AS run_id, r.public_analysis_id AS analysis_id,
+                      r.conversation_id,
                       r.status, r.intent, r.topic, r.latency_ms,
                       r.started_at, r.error,
                       c.llm_calls, c.total_tokens, c.cost
@@ -528,9 +529,11 @@ def get_conversation_runs(conversation_id: str) -> list[dict]:
         runs = conn.execute(
             """SELECT r.id AS run_id, r.public_analysis_id AS analysis_id,
                       r.status, r.intent, r.topic, r.latency_ms, r.started_at, r.error,
-                      m.content AS user_message
+                      m.content AS user_message,
+                      c.cost AS cost
                FROM agent_runs r
                LEFT JOIN messages m ON m.id = r.trigger_message_id
+               LEFT JOIN run_costs c ON c.run_id = r.id
                WHERE r.conversation_id = ?
                ORDER BY r.started_at ASC, r.rowid ASC""",
             (conversation_id,),
@@ -559,6 +562,7 @@ def get_conversation_runs(conversation_id: str) -> list[dict]:
                 "user_message": msg if len(msg) <= 80 else msg[:80] + "…",
                 "llm_calls": stats["llm_calls"],
                 "total_tokens": stats["total_tokens"],
+                "cost": d.get("cost"),  # 元;None=无定价或该轮无 LLM 开销
             })
         return result
     finally:
