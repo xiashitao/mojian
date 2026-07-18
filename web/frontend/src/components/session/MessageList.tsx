@@ -7,6 +7,8 @@ export interface MessageListProps {
   messages: UiMessage[];
   loading: boolean;
   bottomRef: RefObject<HTMLDivElement | null>;
+  scrollRef: RefObject<HTMLDivElement | null>;
+  onScroll: () => void;
   onSendFollowup: (text: string) => void;
   onFeedback: (id: string, feedback: MessageFeedback) => void;
 }
@@ -16,11 +18,13 @@ export function MessageList({
   messages,
   loading,
   bottomRef,
+  scrollRef,
+  onScroll,
   onSendFollowup,
   onFeedback,
 }: MessageListProps) {
   return (
-    <div className="oracle-chat__scroll">
+    <div className="oracle-chat__scroll" ref={scrollRef} onScroll={onScroll}>
       {messages.length === 0 ? (
         <SessionWelcome onPick={onSendFollowup} />
       ) : (

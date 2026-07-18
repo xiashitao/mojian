@@ -98,6 +98,8 @@ def _build_user_prompt(
         parts.append("(空——这是首次为该用户建立画像)")
 
     # 2. 最近的咨询记录(笔记)
+    # memory_text(agent 每轮自主记下的用户处境/计划)是画像最强的原料——
+    # 它是用户的自述,比我们给出的结论信号强得多,单独标出。
     if notes:
         parts.append("## 最近的咨询记录(用户聊过的话题和结论)")
         lines: list[str] = []
@@ -105,7 +107,11 @@ def _build_user_prompt(
             topic = topic_cn(n.get("topic")) if n.get("topic") else "未分类"
             question = str(n.get("question", "")).strip()[:60]
             conclusion = str(n.get("conclusion", "")).strip()
-            lines.append(f"[{topic}] 问:{question} → 结论:{conclusion}")
+            line = f"[{topic}] 问:{question} → 结论:{conclusion}"
+            memory = str(n.get("memory_text") or "").strip()
+            if memory:
+                line += f"（用户自述:{memory}）"
+            lines.append(line)
         parts.append("\n".join(lines))
 
     # 3. 最近的对话(让模型看到用户的原话和语气)

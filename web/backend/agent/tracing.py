@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import repository
+from . import hooks, repository
 
 
 class TraceWriter:
@@ -30,4 +30,12 @@ class TraceWriter:
             output_data=output_data,
             summary=summary,
         )
+        # 观测事件:每落一步 trace 广播一次(观察类,hook 失败不影响落库)。
+        hooks.dispatch("on_step", {
+            "step_type": step_type,
+            "step_index": self._step_index,
+            "input": input_data,
+            "output": output_data,
+            "summary": summary,
+        }, run_id=self.run_id, match_value=step_type)
 

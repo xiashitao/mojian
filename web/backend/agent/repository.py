@@ -187,6 +187,194 @@ def add_trace(
         conn.close()
 
 
+def add_run_cost(
+    run_id: str,
+    conversation_id: str,
+    *,
+    llm_calls: int,
+    prompt_tokens: int,
+    completion_tokens: int,
+    total_tokens: int,
+    cost: float | None,
+    models: dict | None = None,
+) -> None:
+    """记一轮 run 的 LLM 开销(CostMeter observer 在 run 结束时调用)。
+
+    INSERT OR REPLACE:同 run 重复写入以最后一次为准(正常不会发生,防御性)。
+    """
+    conn = get_db()
+    try:
+        conn.execute(
+            """INSERT OR REPLACE INTO run_costs
+               (run_id, conversation_id, llm_calls, prompt_tokens,
+                completion_tokens, total_tokens, cost, models_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (run_id, conversation_id, llm_calls, prompt_tokens,
+             completion_tokens, total_tokens, cost, _dump(models)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_message_feedback(
+    analysis_id: str,
+    *,
+    owner_key: str | None,
+    feedback: str | None,
+    comment: str | None = None,
+) -> dict | None:
+    """给某轮回复记用户反馈,存进助手消息的 metadata_json。
+
+    以 analysis_id 为键(前端流式期间只有它是稳定标识);归属校验:该轮所在
+    会话的 user_id 必须等于 owner_key,否则视同不存在(404 语义,不泄露存在性)。
+    feedback: "like" | "dislike" | None(None = 撤销,连评论一起清掉)。
+    返回结果概要;找不到或不属于该用户时返回 None。
+    """
+    if not owner_key:
+        return None
+    conn = get_db()
+    try:
+        row = conn.execute(
+            """SELECT r.assistant_message_id AS mid, c.user_id AS owner
+               FROM agent_runs r JOIN conversations c ON c.id = r.conversation_id
+               WHERE r.public_analysis_id = ?""",
+            (analysis_id,),
+        ).fetchone()
+        if not row or not row["mid"] or row["owner"] != owner_key:
+            return None
+        meta_row = conn.execute(
+            "SELECT metadata_json FROM messages WHERE id = ?", (row["mid"],)
+        ).fetchone()
+        meta = _load(meta_row["metadata_json"] if meta_row else None, {})
+        if feedback is None:
+            for key in ("feedback", "feedback_comment", "feedback_at"):
+                meta.pop(key, None)
+        else:
+            meta["feedback"] = feedback
+            if comment and comment.strip():
+                meta["feedback_comment"] = comment.strip()[:500]
+            else:
+                meta.pop("feedback_comment", None)
+            meta["feedback_at"] = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
+        conn.execute(
+            "UPDATE messages SET metadata_json = ? WHERE id = ?",
+            (_dump(meta), row["mid"]),
+        )
+        conn.commit()
+        return {"analysis_id": analysis_id, "feedback": feedback}
+    finally:
+        conn.close()
+
+
+def list_feedback(days: int = 30, limit: int = 100) -> list[dict]:
+    """近期带反馈的轮次(新→旧)——运营排查入口:看到差评,拿 analysis_id
+    直接开该轮 trace。"""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """SELECT json_extract(m.metadata_json, '$.feedback')         AS feedback,
+                      json_extract(m.metadata_json, '$.feedback_comment') AS comment,
+                      json_extract(m.metadata_json, '$.feedback_at')      AS feedback_at,
+                      m.analysis_id, m.conversation_id,
+                      substr(m.content, 1, 80)                            AS reply_excerpt,
+                      r.intent, r.topic,
+                      (SELECT substr(um.content, 1, 80) FROM messages um
+                       WHERE um.id = r.trigger_message_id)                AS user_message
+               FROM messages m
+               JOIN agent_runs r ON r.public_analysis_id = m.analysis_id
+               WHERE json_extract(m.metadata_json, '$.feedback') IS NOT NULL
+                 AND m.created_at >= datetime('now', ?)
+               ORDER BY json_extract(m.metadata_json, '$.feedback_at') DESC
+               LIMIT ?""",
+            (f"-{days} days", limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_run_with_traces(ref: str) -> dict | None:
+    """按 run_id 或 public_analysis_id 取一轮 run 及其全部 trace(调用链视图用)。"""
+    conn = get_db()
+    try:
+        run = conn.execute(
+            "SELECT * FROM agent_runs WHERE id = ? OR public_analysis_id = ?",
+            (ref, ref),
+        ).fetchone()
+        if not run:
+            return None
+        run_dict = _row_to_dict(run)
+        traces = conn.execute(
+            """SELECT * FROM run_traces
+               WHERE run_id = ?
+               ORDER BY step_index ASC, created_at ASC""",
+            (run_dict["id"],),
+        ).fetchall()
+        return {
+            "run": run_dict,
+            "traces": [_row_to_dict(t, parse_json=True) for t in traces],
+        }
+    finally:
+        conn.close()
+
+
+def recent_runs(limit: int = 20) -> list[dict]:
+    """最近 N 轮 run 的概要(排查入口):状态/耗时/错误/开销。"""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """SELECT r.id AS run_id, r.public_analysis_id AS analysis_id,
+                      r.status, r.intent, r.topic, r.latency_ms,
+                      r.started_at, r.error,
+                      c.llm_calls, c.total_tokens, c.cost
+               FROM agent_runs r
+               LEFT JOIN run_costs c ON c.run_id = r.id
+               ORDER BY r.started_at DESC, r.rowid DESC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [_row_to_dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def cost_summary(days: int = 7) -> dict:
+    """成本报表:近 N 天按天聚合 + 按模型聚合(模型明细从 models_json 展开)。
+
+    cost 里的 NULL(无定价模型)聚合时被 SUM 自然跳过;covered 标出有价可算的
+    run 占比,报表读的人能看出「这个总额覆盖了多少调用」。
+    """
+    conn = get_db()
+    try:
+        by_day = [dict(r) for r in conn.execute(
+            """SELECT date(created_at) AS day,
+                      COUNT(*) AS runs,
+                      SUM(llm_calls) AS llm_calls,
+                      SUM(total_tokens) AS total_tokens,
+                      ROUND(SUM(cost), 4) AS cost,
+                      SUM(cost IS NOT NULL) AS priced_runs
+               FROM run_costs
+               WHERE created_at >= datetime('now', ?)
+               GROUP BY day ORDER BY day DESC""",
+            (f"-{days} days",),
+        ).fetchall()]
+        by_model = [dict(r) for r in conn.execute(
+            """SELECT m.key AS model,
+                      SUM(json_extract(m.value, '$.calls')) AS calls,
+                      SUM(json_extract(m.value, '$.prompt_tokens')) AS prompt_tokens,
+                      SUM(json_extract(m.value, '$.completion_tokens')) AS completion_tokens,
+                      ROUND(SUM(json_extract(m.value, '$.cost')), 4) AS cost
+               FROM run_costs, json_each(run_costs.models_json) AS m
+               WHERE created_at >= datetime('now', ?)
+               GROUP BY model ORDER BY cost DESC""",
+            (f"-{days} days",),
+        ).fetchall()]
+        return {"days": days, "by_day": by_day, "by_model": by_model}
+    finally:
+        conn.close()
+
+
 def list_conversations(limit: int = 50, user_id: str | None = None) -> list[dict]:
     """List a single owner's conversations, most recent first.
 

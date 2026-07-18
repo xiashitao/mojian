@@ -8,8 +8,15 @@ from web.backend.agent import planner, repository
 
 @pytest.fixture()
 def agent_db(tmp_path, monkeypatch):
+    """隔离 DB + 强制 LLM 降级:测试必须密闭——本地 .env 有真实 key 时,
+    这些测试曾真调 API(慢、烧钱,且限流/输出波动导致随机失败)。
+    确定性降级路径是回归网;真实 LLM 的质量由 eval 体系负责。"""
     monkeypatch.setattr(database, "DB_PATH", tmp_path / "agent.db")
     database.init_db()
+    from web.backend.agent import extractor, responder
+    from web.backend.services import llm
+    for mod in (extractor, responder, llm):
+        monkeypatch.setattr(mod, "is_configured", lambda: False)
 
 
 def test_stream_chat_records_assistant_message_id(agent_db):

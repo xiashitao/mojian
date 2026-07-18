@@ -1,6 +1,7 @@
 """Tool wrappers around deterministic bazibase APIs."""
 from __future__ import annotations
 
+import time
 from collections import OrderedDict
 from datetime import datetime
 from typing import Any
@@ -18,6 +19,7 @@ from bazibase.arbitration import (
 )
 
 from ..services.llm import LLMError, complete, is_configured
+from . import obs
 from .models import BirthInfo
 from .topics import all_key_ages
 from ..services.enrich import enrich_chart
@@ -50,6 +52,7 @@ def run_bazibase_tools(
     birth_info: BirthInfo,
     *,
     reference_year: int | None = None,
+    trace_sink: obs.TraceSink | None = None,
 ) -> dict[str, Any]:
     """Chart casting + diagnosis + arbitration, cached by birth determinants.
 
@@ -59,14 +62,19 @@ def run_bazibase_tools(
             resolves its active 大运 + 流年 at cast time (`current_period`), so
             those become the shared basis for all downstream judgments. The
             caller injects "now"; the engine never reads the clock.
+        trace_sink: 传入则记一个 tool_call span(耗时 + 是否缓存命中),
+            与 llm_call 并列构成完整的外部调用链。
     """
     if not birth_info.is_complete():
         raise ValueError(f"birth info incomplete: {birth_info.complete_missing_fields()}")
 
+    started = time.monotonic()
     key = _cache_key(birth_info, reference_year)
     cached = _TOOL_CACHE.get(key)
     if cached is not None:
         _TOOL_CACHE.move_to_end(key)
+        _emit_tool_span(trace_sink, started, cache_hit=True,
+                        reference_year=reference_year)
         return cached
 
     result = _compute_bazibase_tools(birth_info, reference_year)
@@ -74,7 +82,18 @@ def run_bazibase_tools(
     _TOOL_CACHE.move_to_end(key)
     if len(_TOOL_CACHE) > _TOOL_CACHE_MAX:
         _TOOL_CACHE.popitem(last=False)
+    _emit_tool_span(trace_sink, started, cache_hit=False,
+                    reference_year=reference_year)
     return result
+
+
+def _emit_tool_span(trace_sink: obs.TraceSink | None, started: float,
+                    *, cache_hit: bool, reference_year: int | None) -> None:
+    obs.emit(trace_sink, obs.Span(
+        kind="tool", name="tool.bazibase",
+        latency_ms=int((time.monotonic() - started) * 1000),
+        attributes={"cached": cache_hit, "reference_year": reference_year},
+    ))
 
 
 _STEMS = "甲乙丙丁戊己庚辛壬癸"

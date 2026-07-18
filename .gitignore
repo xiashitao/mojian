@@ -60,3 +60,4 @@ web/frontend/src/**/*.js.map
 
 # DB backups (local testing artifacts)
 *.db.bak*
+web/logs/

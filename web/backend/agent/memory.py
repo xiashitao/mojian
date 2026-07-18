@@ -73,20 +73,27 @@ def add_note(
     topic: str | None,
     question: str,
     conclusion: str,
+    memory_text: str = "",
     analysis_id: str | None = None,
     subject: Subject = DEFAULT_SUBJECT,
 ) -> None:
-    """Append a one-line record of a past consultation for (user, subject)."""
-    if not memory_key or not conclusion.strip():
+    """Append a record of a past consultation for (user, subject).
+
+    conclusion 记「这次给了什么结论」;memory_text 是 agent 自主记忆——模型
+    自行判断值得长期记住的用户信息(处境/计划/事实),可空。两者有其一即落库。
+    """
+    if not memory_key or not (conclusion.strip() or memory_text.strip()):
         return
     conn = get_db()
     try:
         conn.execute(
             """INSERT INTO user_memory_notes
-                   (id, memory_key, subject, topic, question, conclusion, analysis_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                   (id, memory_key, subject, topic, question, conclusion,
+                    memory_text, analysis_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (uuid.uuid4().hex, memory_key, subject, topic, question[:200],
-             conclusion.strip()[:300], analysis_id),
+             conclusion.strip()[:300], memory_text.strip()[:200] or None,
+             analysis_id),
         )
         conn.commit()
     finally:
@@ -104,7 +111,7 @@ def recent_notes(
     conn = get_db()
     try:
         rows = conn.execute(
-            """SELECT topic, question, conclusion, analysis_id, created_at
+            """SELECT topic, question, conclusion, memory_text, analysis_id, created_at
                FROM user_memory_notes
                WHERE memory_key = ? AND subject = ?
                ORDER BY created_at DESC, rowid DESC

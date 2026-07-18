@@ -33,6 +33,8 @@ export default function SessionPage() {
     mobilePanel,
     setMobilePanel,
     bottomRef,
+    scrollRef,
+    handleScroll,
     send,
     stop,
     startNew,
@@ -95,6 +97,8 @@ export default function SessionPage() {
             messages={messages}
             loading={loading}
             bottomRef={bottomRef}
+            scrollRef={scrollRef}
+            onScroll={handleScroll}
             onSendFollowup={(text) => void send(text)}
             onFeedback={setMessageFeedback}
           />

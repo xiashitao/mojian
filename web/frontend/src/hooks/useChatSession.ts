@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AuthRequiredError, sendChatMessage } from "../api/chatApi";
-import { getConversation } from "../api/conversationApi";
+import { getConversation, postFeedback } from "../api/conversationApi";
 import { useAuth } from "../auth";
 import { uuid } from "../utils/anonId";
 import type { ChatState, Topic } from "../types/api";
@@ -15,18 +15,24 @@ import { useArchiveCollapsed } from "./useArchiveCollapsed";
 import { useConversations } from "./useConversations";
 import { DEFAULT_TONE, type ToneId } from "../components/session/TonePopover";
 
-/** Pull persisted chart + follow-ups out of a stored message's metadata. */
+/** Pull persisted chart + follow-ups + feedback out of a stored message's metadata. */
 function parseMeta(metadataJson?: string): {
   chart?: ChartData;
   followups?: string[];
+  feedback?: MessageFeedback | null;
 } {
   if (!metadataJson) return {};
   try {
     const meta = JSON.parse(metadataJson) as {
       chart?: ChartData;
       suggested_followups?: string[];
+      feedback?: MessageFeedback | null;
     };
-    return { chart: meta.chart, followups: meta.suggested_followups };
+    return {
+      chart: meta.chart,
+      followups: meta.suggested_followups,
+      feedback: meta.feedback ?? null,
+    };
   } catch {
     return {};
   }
@@ -65,12 +71,27 @@ export function useChatSession() {
   } | null>(null);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  // 智能跟随:流式输出时每个 token 都会更新 messages,若无条件滚到底,
+  // 用户往上翻会被不断顶回去。规则:在底部(阈值内)才跟随;往上滚就暂停;
+  // 滚回底部自动恢复;自己发新消息时强制恢复。
+  const followRef = useRef(true);
   const sentRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const pendingPairRef = useRef<{ userId: string; pendingId: string; text: string } | null>(null);
 
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    followRef.current = distance < 80;
+  }, []);
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    if (!followRef.current) return;
+    // 即时滚动(非 smooth):smooth 的动画期间滚动位置不在底部,
+    // 会让 handleScroll 误判"用户离开了底部"而错误暂停跟随。
+    bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages, loading]);
 
   const loadConversation = useCallback(async (id: string) => {
@@ -89,6 +110,7 @@ export function useChatSession() {
             created_at: m.created_at,
             chart: meta.chart,
             followups: meta.followups,
+            feedback: meta.feedback,
           };
         }),
       );
@@ -143,6 +165,7 @@ export function useChatSession() {
         return;
       }
 
+      followRef.current = true; // 自己发消息 = 明确想看最新回复,恢复跟随
       const userId = `local-${uuid()}`;
       const pendingId = `pending-${uuid()}`;
       const now = new Date().toISOString();
@@ -263,13 +286,22 @@ export function useChatSession() {
     return () => window.removeEventListener("keydown", onKey);
   }, [loading, stop]);
 
-  const setMessageFeedback = useCallback((id: string, feedback: MessageFeedback) => {
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === id ? { ...m, feedback: m.feedback === feedback ? null : feedback } : m,
-      ),
-    );
-  }, []);
+  const setMessageFeedback = useCallback(
+    (id: string, feedback: MessageFeedback) => {
+      const target = messages.find((m) => m.id === id);
+      if (!target) return;
+      const next = target.feedback === feedback ? null : feedback; // 再点一次=撤销
+      setMessages((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, feedback: next } : m)),
+      );
+      // 持久化(按 analysis_id,后端做归属校验)。乐观更新,失败静默——
+      // 反馈是增强功能,不值得为它打断用户;运营侧看到的是落库成功的那部分。
+      if (target.analysis_id) {
+        void postFeedback(target.analysis_id, next).catch(() => {});
+      }
+    },
+    [messages],
+  );
 
   // Receive an initial message handed off from the landing page.
   useEffect(() => {
@@ -311,6 +343,8 @@ export function useChatSession() {
     mobilePanel,
     setMobilePanel,
     bottomRef,
+    scrollRef,
+    handleScroll,
     send,
     stop,
     startNew,

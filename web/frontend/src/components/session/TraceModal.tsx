@@ -20,6 +20,8 @@ interface LlmOutput {
   total_tokens?: number;
   prompt_tokens?: number;
   completion_tokens?: number;
+  cost?: number; // 元(CNY),CostMeter 按记录时定价写入;无定价模型时缺省
+  cached?: boolean; // tool_call:结果是否来自工具缓存
   error?: string;
 }
 
@@ -32,11 +34,15 @@ const STEP_LABEL: Record<string, string> = {
   generate_reply: "生成回复",
   confirm_subject: "确认主体",
   update_memory: "更新记忆",
+  update_memory_error: "记忆写入失败",
   update_profile: "更新画像",
   update_profile_error: "画像更新失败",
   persist_state: "落盘状态",
+  persist_error: "持久化失败",
+  hook_block: "hook 拦截",
   error: "运行出错",
   llm_call: "模型调用",
+  tool_call: "工具调用",
 };
 
 function stepLabel(t: string): string {
@@ -81,6 +87,10 @@ export function TraceModal({ analysisId, onClose }: Props) {
   const llmSteps = steps.filter((s) => s.step_type === "llm_call");
   const totalTokens = llmSteps.reduce(
     (n, s) => n + ((s.output_json as LlmOutput)?.total_tokens ?? 0),
+    0,
+  );
+  const totalCost = llmSteps.reduce(
+    (n, s) => n + ((s.output_json as LlmOutput)?.cost ?? 0),
     0,
   );
 
@@ -130,6 +140,7 @@ export function TraceModal({ analysisId, onClose }: Props) {
                   )}
                   <span className="trace-chip">
                     {llmSteps.length} 次模型 · {totalTokens} tok
+                    {totalCost > 0 ? ` · ¥${totalCost.toFixed(4)}` : ""}
                   </span>
                 </div>
                 {data.analysis.error && (
@@ -152,25 +163,29 @@ export function TraceModal({ analysisId, onClose }: Props) {
 
 function TraceRow({ step }: { step: TraceStep }) {
   const isLlm = step.step_type === "llm_call";
+  // 外部调用类步骤(llm_call/tool_call/mcp_call…)统一显示调用元信息行
+  const isCall = step.step_type.endsWith("_call");
   const out = (step.output_json ?? {}) as LlmOutput;
   const failed = step.step_type === "error" || out.ok === false;
 
   return (
-    <li className={`trace-step ${isLlm ? "trace-step--llm" : ""} ${failed ? "trace-step--fail" : ""}`}>
+    <li className={`trace-step ${isCall ? "trace-step--llm" : ""} ${failed ? "trace-step--fail" : ""}`}>
       <div className="trace-step__head">
         <span className="trace-step__idx">{step.step_index}</span>
         <span className="trace-step__type">{stepLabel(step.step_type)}</span>
-        {isLlm && (
+        {isCall && (
           <span className="trace-step__meta">
             {out.model}
             {out.stream ? " · 流式" : ""}
             {out.latency_ms != null ? ` · ${out.latency_ms}ms` : ""}
+            {out.cached != null ? (out.cached ? " · 缓存命中" : " · 实算") : ""}
             {out.total_tokens != null ? ` · ${out.total_tokens}tok` : ""}
+            {out.cost != null ? ` · ¥${out.cost.toFixed(4)}` : ""}
             {out.attempts && out.attempts > 1 ? ` · ${out.attempts}次` : ""}
           </span>
         )}
       </div>
-      {step.summary && !isLlm && (
+      {step.summary && !isCall && (
         <div className="trace-step__summary">{step.summary}</div>
       )}
       <details className="trace-step__detail">

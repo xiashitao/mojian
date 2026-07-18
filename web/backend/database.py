@@ -55,6 +55,9 @@ CREATE TABLE IF NOT EXISTS user_memory (
 )
 """
 
+# memory_text:agent 自主记忆——模型每轮自行判断「这轮有什么值得长期记住的
+# 用户信息」写下的自由文本(用户明确说出的处境/计划/事实),与 conclusion
+# (结论摘要)互补。可空;干支等命理术语在写入前净化。
 _CREATE_USER_MEMORY_NOTES = """
 CREATE TABLE IF NOT EXISTS user_memory_notes (
     id          TEXT PRIMARY KEY,
@@ -63,6 +66,7 @@ CREATE TABLE IF NOT EXISTS user_memory_notes (
     topic       TEXT,
     question    TEXT,
     conclusion  TEXT,
+    memory_text TEXT,
     analysis_id TEXT,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 )
@@ -155,11 +159,31 @@ CREATE TABLE IF NOT EXISTS run_traces (
 )
 """
 
+# 每轮 run 的 LLM 开销(CostMeter observer 在 run 结束时写入)。
+# cost 单位为元(CNY),按「记录时定价」计——价格表日后调整不影响历史数据;
+# NULL = 该轮所用模型无定价(不知道就说不知道,不填 0 冒充)。
+# models_json 存按模型分桶的明细 {model: {calls, prompt_tokens, completion_tokens, cost}}。
+_CREATE_RUN_COSTS = """
+CREATE TABLE IF NOT EXISTS run_costs (
+    run_id            TEXT PRIMARY KEY,
+    conversation_id   TEXT NOT NULL,
+    llm_calls         INTEGER NOT NULL DEFAULT 0,
+    prompt_tokens     INTEGER NOT NULL DEFAULT 0,
+    completion_tokens INTEGER NOT NULL DEFAULT 0,
+    total_tokens      INTEGER NOT NULL DEFAULT 0,
+    cost              REAL,
+    models_json       TEXT NOT NULL DEFAULT '{}',
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (run_id) REFERENCES agent_runs(id)
+)
+"""
+
 _CREATE_INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_agent_runs_conversation ON agent_runs(conversation_id, started_at)",
     "CREATE INDEX IF NOT EXISTS idx_run_traces_run ON run_traces(run_id, step_index)",
     "CREATE INDEX IF NOT EXISTS idx_agent_runs_analysis ON agent_runs(public_analysis_id)",
+    "CREATE INDEX IF NOT EXISTS idx_run_costs_created ON run_costs(created_at)",
 )
 
 
@@ -179,6 +203,17 @@ def _table_pk(conn: sqlite3.Connection, table: str) -> list[str]:
     except sqlite3.Error:
         return []
     return [r["name"] for r in row if r["pk"]]
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
+    """Add a column if the table doesn't have it yet (idempotent light migration).
+
+    SQLite's ALTER TABLE ADD COLUMN is cheap (no table rebuild), so this is the
+    right tool for additive schema evolution — heavier changes (PK rework) go
+    through the rebuild path like _migrate_subject_schema."""
+    cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if cols and column not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
 
 def _migrate_subject_schema(conn: sqlite3.Connection) -> None:
@@ -255,9 +290,12 @@ def init_db():
         conn.execute(_CREATE_MESSAGES)
         conn.execute(_CREATE_AGENT_RUNS)
         conn.execute(_CREATE_RUN_TRACES)
+        conn.execute(_CREATE_RUN_COSTS)
         # Migrate legacy single-PK tables to the new (memory_key, subject) schema.
         # Idempotent; runs on every init but is a no-op once migrated.
         _migrate_subject_schema(conn)
+        # 轻量列迁移:老库补 memory_text 列(幂等)。
+        _ensure_column(conn, "user_memory_notes", "memory_text", "TEXT")
         for statement in _CREATE_INDEXES:
             conn.execute(statement)
         for statement in _CREATE_USERS_INDEX:

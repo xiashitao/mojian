@@ -14,7 +14,7 @@ from .chart_card import build_chart_card
 from .profile import build_or_update_profile
 from .extractor import merge_birth_info, _has_birth_signal
 from .ids import new_analysis_id
-from .models import BirthInfo, ChatState, ConversationState, Topic
+from .models import BirthInfo, ChatState, ConversationState, RouteDecision, Topic
 from .router import route
 from .responder import (
     build_missing_info_reply,
@@ -24,6 +24,7 @@ from .responder import (
 )
 from .tools import run_bazibase_tools
 from .tracing import TraceWriter
+from . import hooks
 
 from bazibase import solar_ganzhi_year
 
@@ -113,7 +114,39 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
             if remembered:
                 state.birth_info = merge_birth_info(remembered, state.birth_info)
 
-        decision = route(message, state, trace_sink=spans)
+        # hook: user_message —— 可改写本轮消息(patch)或直接拦下(block)。
+        # 注:用户原文已按原样落库(add_message 在前),patch 只影响路由与回复。
+        um = hooks.dispatch("user_message", {"message": message}, run_id=run["id"])
+        if um.blocked:
+            # 拦下的消息按越界处理;保留会话已有生辰,别让空 decision 冲掉状态。
+            decision = RouteDecision(action="out_of_scope",
+                                     birth_info=state.birth_info)
+            tracer.add("hook_block", input_data={"event": "user_message"},
+                       output_data={"by": um.blocked_by, "reason": um.reason},
+                       summary=f"Blocked by hook {um.blocked_by}: {um.reason}")
+        else:
+            message = um.payload["message"]
+            decision = route(message, state, trace_sink=spans)
+
+        # hook: post_route —— 可覆盖路由结论(action/intent/topic),block 视同越界。
+        pr = hooks.dispatch(
+            "post_route",
+            {"action": decision.action, "intent": decision.intent,
+             "topic": decision.topic},
+            run_id=run["id"], match_value=decision.action)
+        if pr.blocked:
+            decision = decision.model_copy(update={"action": "out_of_scope"})
+        elif (pr.payload["action"], pr.payload["intent"], pr.payload["topic"]) != (
+                decision.action, decision.intent, decision.topic):
+            # 经 model_validate 重建:坏 patch(非法 action 等)在这里当场炸,
+            # 而不是带病进管线。
+            decision = RouteDecision.model_validate({
+                **decision.model_dump(),
+                "action": pr.payload["action"],
+                "intent": pr.payload["intent"],
+                "topic": pr.payload["topic"],
+            })
+
         intent = decision.intent
         topic = decision.topic
         merged_birth_info = decision.birth_info
@@ -199,10 +232,22 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
             # all downstream judgments, while the engine stays clock-free. Use
             # the 立春-based 干支 year (not the calendar year): before 立春 the
             # 流年 still belongs to the previous 干支 year.
+            # hook: pre_tool / post_tool —— 排盘调用的前后挂载点(如 post_tool
+            # 从结果里剥敏感字段)。args 只开放 reference_year;生辰不开放 patch。
+            pt = hooks.dispatch(
+                "pre_tool",
+                {"tool": "bazibase",
+                 "args": {"reference_year": solar_ganzhi_year(datetime.now())}},
+                run_id=run["id"], match_value="bazibase")
             tool_result = run_bazibase_tools(
                 merged_birth_info,
-                reference_year=solar_ganzhi_year(datetime.now()),
+                reference_year=pt.payload["args"]["reference_year"],
+                trace_sink=spans,  # 记 tool_call span(耗时/缓存命中),与 llm_call 并列
             )
+            tool_result = hooks.dispatch(
+                "post_tool", {"tool": "bazibase", "result": tool_result},
+                run_id=run["id"], match_value="bazibase",
+            ).payload["result"]
             tracer.add("cast_chart", input_data=merged_birth_info.model_dump(),
                        output_data=tool_result["chart"], summary="Casted Ba Zi chart.")
             tracer.add("diagnose",
@@ -243,7 +288,10 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
 
             clarify = decision.action == "clarify"
             prior_messages = _prior_messages(conv_id, user_message["id"])
-            past_notes = memory.recent_notes(memory_key, subject=current_subject)
+            # 候选池取 30 条(而非默认 5):真正进 prompt 的仍由 select_notes
+            # 按查询相关性 + 预算精选 4 条——池子大了精选才有意义,prompt 不变大。
+            past_notes = memory.recent_notes(memory_key, subject=current_subject,
+                                             limit=30)
             current_profile = memory.get_profile(memory_key, subject=current_subject)
             generation_trace = None
             for chunk, final_state, generation_trace in stream_consultation_reply(
@@ -267,15 +315,24 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
                                output_data=generation_trace,
                                summary="Generated consultation reply.")
 
-            # Remember a one-line conclusion of this consultation for next time.
+            # Remember this consultation: a one-line conclusion + the agent's
+            # own memory note (what it judged worth remembering about the user).
             conclusion = (generation_trace or {}).get("conclusion", "")
-            if conclusion:
-                memory.add_note(memory_key, topic=topic, question=message,
-                                conclusion=conclusion, analysis_id=analysis_id,
-                                subject=current_subject)
-                tracer.add("update_memory", input_data={"topic": topic},
-                           output_data={"conclusion": conclusion},
-                           summary="Saved consultation conclusion to user memory.")
+            memory_note = (generation_trace or {}).get("memory", "")
+            if conclusion or memory_note:
+                try:  # 记忆是增强,写入失败绝不影响已产出的回复
+                    memory.add_note(memory_key, topic=topic, question=message,
+                                    conclusion=conclusion, memory_text=memory_note,
+                                    analysis_id=analysis_id,
+                                    subject=current_subject)
+                    tracer.add("update_memory", input_data={"topic": topic},
+                               output_data={"conclusion": conclusion,
+                                            "memory": memory_note},
+                               summary="Saved consultation conclusion to user memory.")
+                except Exception as e:  # noqa: BLE001
+                    tracer.add("update_memory_error",
+                               input_data={"error": str(e)}, output_data={},
+                               summary=f"Memory save skipped: {e}")
 
             # 用户画像:每 N 轮咨询后用 fast 模型批量更新。
             # 用 turns_since_update 计数,达到阈值就回顾最近的笔记+对话,更新画像。
@@ -307,19 +364,41 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
                                    output_data={}, summary=f"Profile update skipped: {e}")
 
         full_reply = "".join(reply_parts)
-        repository.update_conversation_state(conv_id, state.model_dump())
-        metadata = chat_state.model_dump()
-        if chart_card_payload:
-            metadata["chart"] = chart_card_payload  # so the card survives reload
-        if conclusion:
-            metadata["conclusion"] = conclusion  # so render_history can compress older turns
-        assistant_message = repository.add_message(
-            conv_id, "assistant", full_reply,
-            analysis_id=analysis_id, metadata=metadata,
-        )
-        assistant_message_id = assistant_message["id"]
-        tracer.add("persist_state", input_data={}, output_data=state.model_dump(),
-                   summary="Persisted conversation state.")
+        # hook: post_response(观察类)—— 回复已流式发给用户,只可校验/记录,
+        # 改不了已发出的内容,所以这个事件在能力表里就是只读的。
+        hooks.dispatch("post_response",
+                       {"reply": full_reply, "intent": intent, "topic": topic},
+                       run_id=run["id"])
+        # 回复已完整送达:此后的持久化失败不再走 error 分支(用户明明拿到了
+        # 完整回答,不该再收到 error 事件)。降级为 status=partial + trace 记录;
+        # 代价是历史里可能缺这轮助手消息,可从 trace 排查补救。
+        try:
+            repository.update_conversation_state(conv_id, state.model_dump())
+            metadata = chat_state.model_dump()
+            if chart_card_payload:
+                metadata["chart"] = chart_card_payload  # so the card survives reload
+            if conclusion:
+                metadata["conclusion"] = conclusion  # so render_history can compress older turns
+            assistant_message = repository.add_message(
+                conv_id, "assistant", full_reply,
+                analysis_id=analysis_id, metadata=metadata,
+            )
+            assistant_message_id = assistant_message["id"]
+            tracer.add("persist_state", input_data={}, output_data=state.model_dump(),
+                       summary="Persisted conversation state.")
+        except Exception as exc:  # noqa: BLE001
+            status = "partial"
+            error = f"post-reply persistence failed: {exc}"
+            tracer.add("persist_error", input_data={},
+                       output_data={"error": str(exc)},
+                       summary="Reply delivered but persistence failed.")
+
+    except GeneratorExit:
+        # 客户端中途断开:生成器被 close。此处绝不能 yield;标记状态后原样
+        # 上抛,收尾(run 关闭/成本/trace)由 finally 完成,这轮不再"人间蒸发"。
+        status = "disconnected"
+        error = "client disconnected mid-stream"
+        raise
 
     except Exception as exc:
         status = "failed"
@@ -338,7 +417,11 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
     finally:
         # 把本轮所有外部调用 span(LLM/工具/MCP)排入 trace,成功失败都记。
         # best-effort:追踪写入出问题绝不能影响已经产出的回复。
+        # on_span 在 tracer.add 之前派发:hook 可补写 span.attributes
+        # (如 CostMeter 按记录时定价记 cost),补写的字段随 trace 一起落库。
         for span in spans:
+            hooks.dispatch("on_span", {"span": span},
+                           run_id=run["id"], match_value=span.name)
             try:
                 tracer.add(span.step_type(),
                            input_data=span.trace_input(),
@@ -347,13 +430,25 @@ def stream_chat(message: str, conversation_id: str | None = None, *, user_id: st
             except Exception:  # noqa: BLE001
                 pass
 
-    repository.finish_agent_run(
-        run["id"],
-        assistant_message_id=assistant_message_id,
-        status=status, intent=intent, topic=topic,
-        started_monotonic=started, error=error,
-        metadata={"analysis_id": analysis_id},
-    )
+        # 收尾必须在 finally 里:客户端断开(GeneratorExit)时 finally 之后的
+        # 代码不会执行,若收尾放外面,这轮 run 会永远停在 partial、没有成本记录。
+        try:
+            repository.finish_agent_run(
+                run["id"],
+                assistant_message_id=assistant_message_id,
+                status=status, intent=intent, topic=topic,
+                started_monotonic=started, error=error,
+                metadata={"analysis_id": analysis_id},
+            )
+        except Exception:  # noqa: BLE001 - 收尾失败不该吃掉正在传播的异常
+            pass
+        # hook: run_end(观察类)—— 本轮聚合视图(耗时/调用数/token/成本)。
+        hooks.dispatch("run_end", {"summary": hooks.summarize_run(
+            run_id=run["id"], conversation_id=conv_id,
+            status=status, error=error,
+            latency_ms=int((time.monotonic() - started) * 1000),
+            spans=spans,
+        )}, run_id=run["id"])
 
     yield json.dumps({
         "type": "done",

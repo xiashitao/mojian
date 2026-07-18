@@ -292,7 +292,6 @@
 }
 
 .detail-modal__title {
-  font-family: var(--font-brand);
   font-size: 16px;
   font-weight: 600;
   color: var(--bone-100);
@@ -383,7 +382,6 @@
 }
 
 .detail-pillar__gz {
-  font-family: var(--font-brand);
   font-size: 26px;
   line-height: 1.05;
   color: var(--bone-100);
@@ -466,7 +464,6 @@
 }
 
 .prochart__gz b {
-  font-family: var(--font-brand);
   font-size: 22px;
   line-height: 1;
 }
@@ -485,7 +482,6 @@
 }
 
 .prochart__hid b {
-  font-family: var(--font-brand);
   font-size: 11px;
 }
 
@@ -595,7 +591,6 @@
 }
 
 .el-flow__name {
-  font-family: var(--font-brand);
   font-size: 15px;
   line-height: 1;
 }
@@ -645,7 +640,6 @@
   flex-shrink: 0;
   width: 1.4em;
   text-align: center;
-  font-family: var(--font-brand);
   font-size: 14px;
 }
 
@@ -655,7 +649,6 @@
 .interaction.is-hai .interaction__group { color: var(--bronze); }
 
 .interaction__chars {
-  font-family: var(--font-brand);
   font-size: 18px;
   letter-spacing: 0.04em;
 }
@@ -706,7 +699,6 @@
 }
 
 .dayun__gz {
-  font-family: var(--font-brand);
   font-size: 18px;
   color: var(--bone-100);
 }
@@ -768,7 +760,6 @@
 }
 
 .liunian-cell__gz {
-  font-family: var(--font-brand);
   font-size: 14px;
   color: var(--bone-200);
 }

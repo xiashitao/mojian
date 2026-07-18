@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import init_db
+from .agent.hooks_builtin import setup_default_hooks
 from .routers import chart, arbitrate, charts_store, chat, admin, conversations, memory, asr
 from .routers import auth as auth_router
 from .routers import oauth as oauth_router
@@ -22,6 +23,7 @@ from .routers import mock_chat
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    setup_default_hooks()  # 默认 hook:成本统计 + 结构化日志
     yield
 
 
